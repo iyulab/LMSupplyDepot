@@ -1,4 +1,6 @@
-﻿namespace LMSupplyDepots.ModelHub.Interfaces;
+using LMSupplyDepots.External.HuggingFace.Models;
+
+namespace LMSupplyDepots.ModelHub.Interfaces;
 
 /// <summary>
 /// Interface for model downloaders that can download models from external sources
@@ -22,19 +24,20 @@ public interface IModelDownloader
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets information about a model repository
+    /// Gets information about a model collection
     /// </summary>
-    Task<LMRepo> GetRepositoryInfoAsync(
-        string repoId,
+    Task<LMCollection> GetCollectionInfoAsync(
+        string collectionId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Searches for model repositories in an external source
+    /// Discovers model collections in an external source
     /// </summary>
-    Task<IReadOnlyList<LMRepo>> SearchRepositoriesAsync(
+    Task<IReadOnlyList<LMCollection>> DiscoverCollectionsAsync(
         ModelType? type = null,
         string? searchTerm = null,
         int limit = 10,
+        ModelSortField sort = ModelSortField.Downloads,
         CancellationToken cancellationToken = default);
 
     /// <summary>

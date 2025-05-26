@@ -1,0 +1,30 @@
+@baseUrl = http://localhost:5181
+@apiBase = {{baseUrl}}/api
+
+### Discover model collections
+GET {{apiBase}}/collections/discover
+Accept: application/json
+
+### Discover collections with search term
+GET {{apiBase}}/collections/discover?q=llama&limit=10
+Accept: application/json
+
+### Discover collections by type
+GET {{apiBase}}/collections/discover?type=TextGeneration&limit=5
+Accept: application/json
+
+### Get specific collection info (using query string)
+GET {{apiBase}}/collections/info?collectionId=bartowski/Llama-3.2-3B-Instruct-GGUF
+Accept: application/json
+
+### Get collection info for embedding model
+GET {{apiBase}}/collections/info?collectionId=sentence-transformers/all-MiniLM-L6-v2
+Accept: application/json
+
+### Get all models from a collection (using query string)
+GET {{apiBase}}/collections/models?collectionId=bartowski/Llama-3.2-3B-Instruct-GGUF
+Accept: application/json
+
+### Get models from embedding collection
+GET {{apiBase}}/collections/models?collectionId=sentence-transformers/all-MiniLM-L6-v2
+Accept: application/json

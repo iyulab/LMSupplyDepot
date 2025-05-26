@@ -1,40 +1,41 @@
 using Microsoft.AspNetCore.Mvc;
-using LMSupplyDepots.Models;
-using LMSupplyDepots.ModelHub.Models;
-using Microsoft.Extensions.Logging;
-using LMSupplyDepots.Contracts;
-using LMSupplyDepots.ModelHub.Exceptions;
 
 namespace LMSupplyDepots.Host.Controllers;
 
 /// <summary>
-/// Controller for model management operations (Ollama-style API)
+/// Controller for local model management operations
 /// </summary>
 [ApiController]
 [Route("api")]
-public class ModelController : ControllerBase
+public class ModelsController : ControllerBase
 {
     private readonly IHostService _hostService;
-    private readonly ILogger<ModelController> _logger;
+    private readonly ILogger<ModelsController> _logger;
 
-    /// <summary>
-    /// Initializes a new instance of the ModelController
-    /// </summary>
-    public ModelController(IHostService hostService, ILogger<ModelController> logger)
+    public ModelsController(IHostService hostService, ILogger<ModelsController> logger)
     {
         _hostService = hostService;
         _logger = logger;
     }
 
     /// <summary>
-    /// Lists available models
+    /// Lists available local models
     /// </summary>
     [HttpGet("models")]
-    public async Task<ActionResult<LMModel[]>> ListModels()
+    public async Task<ActionResult<LMModel[]>> ListModels(
+        [FromQuery] string? type = null,
+        [FromQuery] string? search = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            var models = await _hostService.ListModelsAsync();
+            ModelType? modelType = null;
+            if (!string.IsNullOrEmpty(type) && Enum.TryParse<ModelType>(type, true, out var parsedType))
+            {
+                modelType = parsedType;
+            }
+
+            var models = await _hostService.ListModelsAsync(modelType, search, cancellationToken);
             return Ok(models);
         }
         catch (Exception ex)
@@ -48,17 +49,16 @@ public class ModelController : ControllerBase
     /// Shows details of a specific model
     /// </summary>
     [HttpPost("show")]
-    public async Task<ActionResult<LMModel>> ShowModel(
-        [FromBody] ModelNameRequest request)
+    public async Task<ActionResult<LMModel>> ShowModel([FromBody] ModelNameRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(request.Name))
         {
-            return BadRequest(new ErrorResponse { Error = "Model name is required" });
+            return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
         }
 
         try
         {
-            var model = await _hostService.GetModelAsync(request.Name);
+            var model = await _hostService.GetModelAsync(request.Name, cancellationToken);
             if (model == null)
             {
                 return NotFound(new ErrorResponse { Error = $"Model '{request.Name}' not found" });
@@ -68,7 +68,62 @@ public class ModelController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting model information for {ModelId}", request.Name);
+            _logger.LogError(ex, "Error getting model information for {Model}", request.Name);
+            return StatusCode(500, new ErrorResponse { Error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Gets a model by alias
+    /// </summary>
+    [HttpGet("models/alias")]
+    public async Task<ActionResult<LMModel>> GetModelByAlias(
+        [FromQuery] string alias,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(alias))
+        {
+            return BadRequest(new ErrorResponse { Error = "Alias is required" });
+        }
+
+        try
+        {
+            var model = await _hostService.GetModelByAliasAsync(alias, cancellationToken);
+            if (model == null)
+            {
+                return NotFound(new ErrorResponse { Error = $"Model with alias '{alias}' not found" });
+            }
+
+            return Ok(model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting model by alias {Alias}", alias);
+            return StatusCode(500, new ErrorResponse { Error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Checks if a model is downloaded
+    /// </summary>
+    [HttpGet("models/downloaded")]
+    public async Task<ActionResult<bool>> IsModelDownloaded(
+        [FromQuery] string model,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(model))
+        {
+            return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
+        }
+
+        try
+        {
+            var isDownloaded = await _hostService.IsModelDownloadedAsync(model, cancellationToken);
+            return Ok(isDownloaded);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking if model {Model} is downloaded", model);
             return StatusCode(500, new ErrorResponse { Error = ex.Message });
         }
     }
@@ -77,77 +132,31 @@ public class ModelController : ControllerBase
     /// Deletes a model
     /// </summary>
     [HttpDelete("delete")]
-    public async Task<ActionResult<StatusResponse>> DeleteModel(
-        [FromBody] ModelNameRequest request)
+    public async Task<ActionResult<StatusResponse>> DeleteModel([FromBody] ModelNameRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(request.Name))
         {
-            return BadRequest(new ErrorResponse { Error = "Model name is required" });
+            return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
         }
 
         try
         {
-            // Unload the model first if it's loaded
-            if (await _hostService.IsModelLoadedAsync(request.Name))
+            if (await _hostService.IsModelLoadedAsync(request.Name, cancellationToken))
             {
-                await _hostService.UnloadModelAsync(request.Name);
+                await _hostService.UnloadModelAsync(request.Name, cancellationToken);
             }
 
-            // Delete the model
-            var deleted = await _hostService.DeleteModelAsync(request.Name);
+            var deleted = await _hostService.DeleteModelAsync(request.Name, cancellationToken);
             if (!deleted)
             {
                 return NotFound(new ErrorResponse { Error = $"Model '{request.Name}' not found" });
             }
 
-            return Ok(new StatusResponse
-            {
-                Status = "success"
-            });
+            return Ok(new StatusResponse { Status = "success" });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting model {ModelId}", request.Name);
-            return StatusCode(500, new ErrorResponse { Error = ex.Message });
-        }
-    }
-
-    /// <summary>
-    /// Searches for models (external repositories)
-    /// </summary>
-    [HttpGet("search")]
-    public async Task<ActionResult<SearchResponse>> SearchModels(
-        [FromQuery] string? q = null, [FromQuery] string? type = null, [FromQuery] int limit = 10)
-    {
-        try
-        {
-            ModelType? modelType = null;
-            if (!string.IsNullOrEmpty(type) && Enum.TryParse<ModelType>(type, true, out var parsedType))
-            {
-                modelType = parsedType;
-            }
-
-            var results = await _hostService.SearchModelsAsync(modelType, q, limit);
-
-            // Convert to Ollama-like response
-            var response = new SearchResponse
-            {
-                Models = results.Select(m => new SearchModelInfo
-                {
-                    Name = m.Model.Id,
-                    Description = m.Model.Description,
-                    Size = m.Model.SizeInBytes,
-                    Format = m.Model.Format,
-                    IsDownloaded = m.IsDownloaded,
-                    Source = m.SourceName
-                }).ToList()
-            };
-
-            return Ok(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error searching for models");
+            _logger.LogError(ex, "Error deleting model {Model}", request.Name);
             return StatusCode(500, new ErrorResponse { Error = ex.Message });
         }
     }
@@ -156,33 +165,35 @@ public class ModelController : ControllerBase
     /// Creates or updates a model alias
     /// </summary>
     [HttpPut("alias")]
-    public async Task<ActionResult> SetAlias([FromBody] AliasRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult> SetAlias([FromBody] AliasRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(request.Name))
         {
-            return BadRequest(new ErrorResponse { Error = "Model name is required" });
+            return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
         }
-
-        var alias = request.Alias;
 
         try
         {
-            // Use the host service to set the alias
-            var updatedModel = await _hostService.SetModelAliasAsync(request.Name, alias, cancellationToken);
-            return Ok(new { Status = "success", Message = $"Alias '{alias}' set for model '{request.Name}'", Model = updatedModel });
+            var updatedModel = await _hostService.SetModelAliasAsync(request.Name, request.Alias, cancellationToken);
+            return Ok(new
+            {
+                Status = "success",
+                Message = $"Alias '{request.Alias}' set for model '{request.Name}'",
+                Model = updatedModel
+            });
         }
         catch (ModelNotFoundException)
         {
-            return NotFound($"Model '{request.Name}' not found");
+            return NotFound(new ErrorResponse { Error = $"Model '{request.Name}' not found" });
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(ex.Message);
+            return BadRequest(new ErrorResponse { Error = ex.Message });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error setting alias {Alias} for model {ModelName}", alias, request.Name);
-            return StatusCode(500, $"An error occurred while setting alias '{alias}' for model '{request.Name}'");
+            _logger.LogError(ex, "Error setting alias {Alias} for model {ModelName}", request.Alias, request.Name);
+            return StatusCode(500, new ErrorResponse { Error = "An error occurred while setting alias" });
         }
     }
 }

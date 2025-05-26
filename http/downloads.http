@@ -1,34 +1,62 @@
-@baseUrl = https://localhost:7212
-@apiBase = {{baseUrl}}/api
+@baseUrl = http://localhost:5181
+@apiBase = {{baseUrl}}/api/downloads
 
 ### Get all active downloads
-GET {{apiBase}}/downloads
+GET {{apiBase}}
 Accept: application/json
 
-### Get download status for a specific model
-GET {{apiBase}}/downloads/hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M/status
+### Get download status for a specific model (using query string)
+GET {{apiBase}}/status?model=hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
 Accept: application/json
 
-### Start downloading a model
-POST {{apiBase}}/downloads/hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
+### Get download status by alias
+GET {{apiBase}}/status?model=llama-3-8b
 Accept: application/json
+
+### Start downloading a model (using POST body)
+POST {{apiBase}}/start
+Content-Type: application/json
+
+{
+  "model": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M"
+}
+
+### Start downloading embedding model
+POST {{apiBase}}/start
+Content-Type: application/json
+
+{
+  "model": "hf:sentence-transformers/all-MiniLM-L6-v2"
+}
+
+### Start downloading by alias
+POST {{apiBase}}/start
+Content-Type: application/json
+
+{
+  "model": "llama-3-8b"
+}
 
 ### Pause download
-POST {{apiBase}}/downloads/hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M/pause
-Accept: application/json
+POST {{apiBase}}/pause
+Content-Type: application/json
+
+{
+  "model": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M"
+}
 
 ### Resume download
-POST {{apiBase}}/downloads/hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M/resume
-Accept: application/json
+POST {{apiBase}}/resume
+Content-Type: application/json
+
+{
+  "model": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M"
+}
 
 ### Cancel download
-POST {{apiBase}}/downloads/hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M/cancel
-Accept: application/json
+POST {{apiBase}}/cancel
+Content-Type: application/json
 
-### Get model info without downloading
-GET {{apiBase}}/downloads/hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M/info
-Accept: application/json
-
-### Get repository info
-GET {{apiBase}}/downloads/repository/bartowski/Llama-3.2-3B-Instruct-GGUF
-Accept: application/json
+{
+  "model": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M"
+}

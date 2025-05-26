@@ -1,4 +1,4 @@
-﻿namespace LMSupplyDepots.ModelHub.Utils;
+namespace LMSupplyDepots.ModelHub.Utils;
 
 /// <summary>
 /// Utility methods for creating model instances
@@ -21,7 +21,7 @@ public static class ModelFactory
             Name = artifactName,
             ArtifactName = artifactName,
             Format = format,
-            Type = ModelType.TextGeneration, // Assume text generation by default
+            Type = ModelType.TextGeneration,
             Capabilities = capabilities,
             FilePaths = new List<string> { filePath },
             SizeInBytes = new FileInfo(filePath).Length,
@@ -30,27 +30,26 @@ public static class ModelFactory
     }
 
     /// <summary>
-    /// Creates a model from a repository and artifact
+    /// Creates a model from a collection and artifact
     /// </summary>
-    public static LMModel FromRepositoryAndArtifact(LMRepo repo, ModelArtifact artifact)
+    public static LMModel FromCollectionAndArtifact(LMCollection collection, ModelArtifact artifact)
     {
         var model = new LMModel
         {
-            Registry = repo.Registry,
-            RepoId = repo.RepoId,
-            Name = $"{Path.GetFileName(repo.RepoId)} ({artifact.Name})",
+            Registry = collection.Hub,
+            RepoId = collection.CollectionId,
+            Name = $"{Path.GetFileName(collection.CollectionId)} ({artifact.Name})",
             Description = artifact.Description,
-            Version = repo.Version,
-            Capabilities = repo.Capabilities.Clone(),
+            Version = collection.Version,
+            Capabilities = collection.Capabilities.Clone(),
             ArtifactName = artifact.Name,
             Format = artifact.Format,
             SizeInBytes = artifact.SizeInBytes,
             FilePaths = artifact.FilePaths.ToList(),
-            Type = repo.Type
+            Type = collection.Type
         };
 
-        // Generate the full ID in the format registry:repoId/artifactName
-        model.Id = $"{repo.Registry}:{repo.RepoId}/{artifact.Name}";
+        model.Id = $"{collection.Hub}:{collection.CollectionId}/{artifact.Name}";
 
         return model;
     }

@@ -1,10 +1,11 @@
-@baseUrl = https://localhost:7212
+### System API Tests
+@baseUrl = http://localhost:5181
 @apiBase = {{baseUrl}}/api
 
-### Get health information
+### Get Health Information
 GET {{apiBase}}/health
 Accept: application/json
 
-### Get system configuration
+### Get System Configuration
 GET {{apiBase}}/config
 Accept: application/json

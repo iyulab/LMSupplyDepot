@@ -1,7 +1,4 @@
-﻿using LMSupplyDepots.External.HuggingFace.Client;
-using LMSupplyDepots.ModelHub.Repositories;
-using Microsoft.Extensions.Options;
-using System.Text.RegularExpressions;
+using LMSupplyDepots.External.HuggingFace.Client;
 
 namespace LMSupplyDepots.ModelHub.HuggingFace;
 
@@ -48,13 +45,22 @@ public partial class HuggingFaceDownloader : IModelDownloader, IDisposable
     {
         var clientOptions = new HuggingFaceClientOptions
         {
-            Token = _options.ApiToken,
+            // Token can be null or empty for public models
+            Token = string.IsNullOrWhiteSpace(_options.ApiToken) ? null : _options.ApiToken,
             MaxConcurrentDownloads = _options.MaxConcurrentFileDownloads,
             Timeout = _options.RequestTimeout,
             MaxRetries = _options.MaxRetries
         };
 
-        // Use the injected logger factory
+        if (string.IsNullOrWhiteSpace(_options.ApiToken))
+        {
+            _logger.LogInformation("HuggingFace API token not provided. Only public models will be accessible.");
+        }
+        else
+        {
+            _logger.LogInformation("HuggingFace API token configured. Public and private models will be accessible.");
+        }
+
         return new HuggingFaceClient(clientOptions, _loggerFactory);
     }
 
@@ -66,16 +72,12 @@ public partial class HuggingFaceDownloader : IModelDownloader, IDisposable
         if (string.IsNullOrWhiteSpace(sourceId))
             return false;
 
-        // Check if it matches typical HuggingFace patterns
         if (_sourceIdRegex.IsMatch(sourceId))
             return true;
 
-        // If there's no prefix but it looks like a HuggingFace ID (contains a slash)
-        // we also handle it as a default handler
         if (sourceId.Contains('/'))
             return true;
 
-        // No explicit prefix and doesn't look like a HF id
         return false;
     }
 

@@ -1,67 +1,67 @@
-﻿namespace LMSupplyDepots.ModelHub.Models;
+namespace LMSupplyDepots.ModelHub.Models;
 
 /// <summary>
-/// Represents a model repository containing multiple artifacts
+/// Represents a model collection containing multiple artifacts
 /// </summary>
-public class LMRepo
+public class LMCollection
 {
     /// <summary>
-    /// Repository identifier
+    /// Collection identifier
     /// </summary>
     public string Id { get; set; } = string.Empty;
 
     /// <summary>
-    /// Model registry (e.g., "hf", "local")
+    /// Model hub (e.g., "hf", "local")
     /// </summary>
-    public string Registry { get; set; } = string.Empty;
+    public string Hub { get; set; } = string.Empty;
 
     /// <summary>
-    /// Repository ID of the model
+    /// Collection ID within the hub
     /// </summary>
-    public string RepoId { get; set; } = string.Empty;
+    public string CollectionId { get; set; } = string.Empty;
 
     /// <summary>
-    /// Display name of the repository
+    /// Display name of the collection
     /// </summary>
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// The type of models in this repository
+    /// The type of models in this collection
     /// </summary>
     public ModelType Type { get; set; }
 
     /// <summary>
-    /// Default format of models in this repository
+    /// Default format of models in this collection
     /// </summary>
     public string DefaultFormat { get; set; } = string.Empty;
 
     /// <summary>
-    /// Version information for the repository
+    /// Version information for the collection
     /// </summary>
     public string Version { get; set; } = string.Empty;
 
     /// <summary>
-    /// Brief description of the repository
+    /// Brief description of the collection
     /// </summary>
     public string Description { get; set; } = string.Empty;
 
     /// <summary>
-    /// Publisher or owner of the repository
+    /// Publisher or owner of the collection
     /// </summary>
     public string Publisher { get; set; } = string.Empty;
 
     /// <summary>
-    /// Available artifacts in this model repository
+    /// Available artifacts in this model collection
     /// </summary>
     public List<ModelArtifact> AvailableArtifacts { get; set; } = new();
 
     /// <summary>
-    /// Common capabilities for all models in this repository
+    /// Common capabilities for all models in this collection
     /// </summary>
     public LMModelCapabilities Capabilities { get; set; } = new();
 
     /// <summary>
-    /// Get a specific model from this repository by artifact name
+    /// Get a specific model from this collection by artifact name
     /// </summary>
     public LMModel? GetModel(string artifactName)
     {
@@ -69,29 +69,27 @@ public class LMRepo
         if (artifact == null)
             return null;
 
-        // Use ModelFactory to create model from repository and artifact
-        return Utils.ModelFactory.FromRepositoryAndArtifact(this, artifact);
+        return Utils.ModelFactory.FromCollectionAndArtifact(this, artifact);
     }
 
     /// <summary>
-    /// Get all models from this repository
+    /// Get all models from this collection
     /// </summary>
     public IReadOnlyList<LMModel> GetAllModels()
     {
         return AvailableArtifacts
-            .Select(a => Utils.ModelFactory.FromRepositoryAndArtifact(this, a))
+            .Select(a => Utils.ModelFactory.FromCollectionAndArtifact(this, a))
             .ToList();
     }
 
     /// <summary>
-    /// Gets the recommended model from this repository
+    /// Gets the recommended model from this collection
     /// </summary>
     public LMModel? GetRecommendedModel()
     {
         if (AvailableArtifacts.Count == 0)
             return null;
 
-        // Try to find a medium-sized model first (good balance between size and quality)
         var mediumSizedArtifact = AvailableArtifacts.FirstOrDefault(a =>
             a.SizeCategory == "M" ||
             a.Name.Contains("Q5_K_M") ||
@@ -100,38 +98,35 @@ public class LMRepo
             a.Name.Contains("-medium"));
 
         if (mediumSizedArtifact != null)
-            return Utils.ModelFactory.FromRepositoryAndArtifact(this, mediumSizedArtifact);
+            return Utils.ModelFactory.FromCollectionAndArtifact(this, mediumSizedArtifact);
 
-        // Look for Q5 models which provide good quality/size balance
         var q5Artifact = AvailableArtifacts.FirstOrDefault(a =>
             a.QuantizationBits == 5 ||
             a.Name.Contains("Q5"));
 
         if (q5Artifact != null)
-            return Utils.ModelFactory.FromRepositoryAndArtifact(this, q5Artifact);
+            return Utils.ModelFactory.FromCollectionAndArtifact(this, q5Artifact);
 
-        // Look for Q4 models which provide decent quality/size balance
         var q4Artifact = AvailableArtifacts.FirstOrDefault(a =>
             a.QuantizationBits == 4 ||
             a.Name.Contains("Q4"));
 
         if (q4Artifact != null)
-            return Utils.ModelFactory.FromRepositoryAndArtifact(this, q4Artifact);
+            return Utils.ModelFactory.FromCollectionAndArtifact(this, q4Artifact);
 
-        // If no specific preference found, just use the first available artifact
-        return Utils.ModelFactory.FromRepositoryAndArtifact(this, AvailableArtifacts[0]);
+        return Utils.ModelFactory.FromCollectionAndArtifact(this, AvailableArtifacts[0]);
     }
 
     /// <summary>
-    /// Creates a copy of this repository
+    /// Creates a copy of this collection
     /// </summary>
-    public LMRepo Clone()
+    public LMCollection Clone()
     {
-        return new LMRepo
+        return new LMCollection
         {
             Id = Id,
-            Registry = Registry,
-            RepoId = RepoId,
+            Hub = Hub,
+            CollectionId = CollectionId,
             Name = Name,
             Type = Type,
             DefaultFormat = DefaultFormat,

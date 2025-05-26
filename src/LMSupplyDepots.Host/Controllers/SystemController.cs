@@ -1,7 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using LMSupplyDepots.Models;
-using System.Reflection;
-using Microsoft.Extensions.Logging;
 
 namespace LMSupplyDepots.Host.Controllers;
 
@@ -64,7 +61,7 @@ public class SystemController : ControllerBase
         {
             var config = new SystemConfig
             {
-                ModelsDirectory = _options.DataPath,
+                DataPath = _options.DataPath,
                 MaxConcurrentDownloads = _options.MaxConcurrentDownloads,
                 MaxConcurrentOperations = _options.MaxConcurrentOperations,
                 EnableModelCaching = _options.EnableModelCaching,
@@ -106,7 +103,7 @@ public class HealthInfo
 /// </summary>
 public class SystemConfig
 {
-    public string ModelsDirectory { get; set; } = "";
+    public string DataPath { get; set; } = "";
     public int MaxConcurrentDownloads { get; set; }
     public int MaxConcurrentOperations { get; set; }
     public bool EnableModelCaching { get; set; }

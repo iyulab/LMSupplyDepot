@@ -1,9 +1,9 @@
-﻿using LMSupplyDepots.External.HuggingFace.Models;
+using LMSupplyDepots.External.HuggingFace.Models;
 
 namespace LMSupplyDepots.ModelHub.Models;
 
 /// <summary>
-/// Extended model representation for ModelHub with repository and artifact information
+/// Extended model representation for ModelHub with collection and artifact information
 /// </summary>
 public class HubModel
 {
@@ -13,9 +13,9 @@ public class HubModel
     public LMModel Model { get; set; } = new();
 
     /// <summary>
-    /// Reference to the repository this model belongs to
+    /// Reference to the collection this model belongs to
     /// </summary>
-    public LMRepo Repository { get; set; }
+    public LMCollection Collection { get; set; }
 
     /// <summary>
     /// Model artifact specification this model represents
@@ -25,37 +25,37 @@ public class HubModel
     /// <summary>
     /// Creates a new HubModel instance
     /// </summary>
-    public HubModel(LMModel model, LMRepo repository, ModelArtifact artifact)
+    public HubModel(LMModel model, LMCollection collection, ModelArtifact artifact)
     {
         Model = model;
-        Repository = repository;
+        Collection = collection;
         Artifact = artifact;
     }
 
     /// <summary>
-    /// Creates a HubModel from a repository and artifact
+    /// Creates a HubModel from a collection and artifact
     /// </summary>
-    public static HubModel FromRepositoryAndArtifact(LMRepo repo, ModelArtifact artifact)
+    public static HubModel FromCollectionAndArtifact(LMCollection collection, ModelArtifact artifact)
     {
         var model = new LMModel
         {
-            Registry = repo.Registry,
-            RepoId = repo.RepoId,
-            Name = $"{Path.GetFileName(repo.RepoId)} ({artifact.Name})",
+            Registry = collection.Hub,
+            RepoId = collection.CollectionId,
+            Name = $"{Path.GetFileName(collection.CollectionId)} ({artifact.Name})",
             Description = artifact.Description,
-            Version = repo.Version,
-            Capabilities = repo.Capabilities.Clone(),
+            Version = collection.Version,
+            Capabilities = collection.Capabilities.Clone(),
             ArtifactName = artifact.Name,
             Format = artifact.Format,
             SizeInBytes = artifact.SizeInBytes,
             FilePaths = artifact.FilePaths.ToList(),
-            Type = repo.Type
+            Type = collection.Type
         };
 
-        // Generate the full ID in the format registry:repoId/artifactName
-        model.Id = $"{repo.Registry}:{repo.RepoId}/{artifact.Name}";
+        // Generate the full ID in the format registry:collectionId/artifactName
+        model.Id = $"{collection.Hub}:{collection.CollectionId}/{artifact.Name}";
 
-        return new HubModel(model, repo, artifact);
+        return new HubModel(model, collection, artifact);
     }
 
     /// <summary>
@@ -63,10 +63,10 @@ public class HubModel
     /// </summary>
     public LMModel ToLMModel()
     {
-        // Ensure the model has all the necessary properties updated from Repository and Artifact
-        Model.Registry = Repository.Registry;
-        Model.RepoId = Repository.RepoId;
-        Model.Type = Repository.Type;
+        // Ensure the model has all the necessary properties updated from Collection and Artifact
+        Model.Registry = Collection.Hub;
+        Model.RepoId = Collection.CollectionId;
+        Model.Type = Collection.Type;
         Model.Format = Artifact.Format;
         Model.ArtifactName = Artifact.Name;
         Model.SizeInBytes = Artifact.SizeInBytes;
@@ -75,7 +75,7 @@ public class HubModel
         // Ensure ID is in the correct format
         if (string.IsNullOrEmpty(Model.Id) || !Model.Id.Contains(':') || !Model.Id.Contains('/'))
         {
-            Model.Id = $"{Repository.Registry}:{Repository.RepoId}/{Artifact.Name}";
+            Model.Id = $"{Collection.Hub}:{Collection.CollectionId}/{Artifact.Name}";
         }
 
         return Model;

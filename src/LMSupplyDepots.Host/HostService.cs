@@ -1,9 +1,4 @@
-﻿using LMSupplyDepots.Models;
-using LMSupplyDepots.ModelHub.Models;
-using LMSupplyDepots.SDK;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using LMSupplyDepots.Contracts;
+using LMSupplyDepots.External.HuggingFace.Models;
 
 namespace LMSupplyDepots.Host;
 
@@ -17,16 +12,11 @@ public class HostService : IHostService, IAsyncDisposable
     private readonly LMSupplyDepot _depot;
     private bool _disposed;
 
-    /// <summary>
-    /// Initializes a new instance of the HostService
-    /// </summary>
-    public HostService(ILogger<HostService> logger,
-        IOptions<HostOptions> options)
+    public HostService(ILogger<HostService> logger, IOptions<HostOptions> options)
     {
         _logger = logger;
         _options = options.Value;
 
-        // Configure SDK options
         var sdkOptions = new LMSupplyDepotOptions
         {
             DataPath = _options.DataPath,
@@ -43,7 +33,6 @@ public class HostService : IHostService, IAsyncDisposable
             ForceCpuOnly = _options.ForceCpuOnly
         };
 
-        // Configure LLama options
         if (_options.LLamaOptions != null)
         {
             sdkOptions.LLamaOptions = new LLamaOptions
@@ -62,186 +51,141 @@ public class HostService : IHostService, IAsyncDisposable
             }
         }
 
-        // Initialize the depot
         _depot = new LMSupplyDepot(sdkOptions, CreateLoggerFactory(logger));
         _logger.LogInformation("LMSupplyDepots Host Service initialized with models directory: {ModelsDirectory}", _options.DataPath);
     }
 
     private static ILoggerFactory CreateLoggerFactory(ILogger logger)
     {
-        // Create a simple logger factory that forwards to the provided logger
         return LoggerFactory.Create(builder =>
         {
             builder.AddProvider(new ForwardingLoggerProvider(logger));
         });
     }
 
-    #region Model Management
+    #region Local Model Management
 
-    /// <summary>
-    /// Lists available models with optional filtering
-    /// </summary>
     public Task<IReadOnlyList<LMModel>> ListModelsAsync(ModelType? type = null, string? searchTerm = null, CancellationToken cancellationToken = default)
     {
         return _depot.ListModelsAsync(type, searchTerm, cancellationToken);
     }
 
-    /// <summary>
-    /// Gets a model by its ID
-    /// </summary>
     public Task<LMModel?> GetModelAsync(string modelId, CancellationToken cancellationToken = default)
     {
         return _depot.GetModelAsync(modelId, cancellationToken);
     }
 
-    /// <summary>
-    /// Checks if a model is loaded
-    /// </summary>
-    public Task<bool> IsModelLoadedAsync(string modelId, CancellationToken cancellationToken = default)
+    public Task<LMModel?> GetModelByAliasAsync(string alias, CancellationToken cancellationToken = default)
     {
-        return _depot.IsModelLoadedAsync(modelId, cancellationToken);
+        return _depot.GetModelByAliasAsync(alias, cancellationToken);
     }
 
-    /// <summary>
-    /// Gets a list of loaded models
-    /// </summary>
-    public Task<IReadOnlyList<LMModel>> GetLoadedModelsAsync(CancellationToken cancellationToken = default)
+    public Task<bool> IsModelDownloadedAsync(string modelId, CancellationToken cancellationToken = default)
     {
-        return _depot.GetLoadedModelsAsync(cancellationToken);
+        return _depot.IsModelDownloadedAsync(modelId, cancellationToken);
     }
 
-    /// <summary>
-    /// Loads a model
-    /// </summary>
-    public Task<LMModel> LoadModelAsync(string modelId, Dictionary<string, object?>? parameters = null, CancellationToken cancellationToken = default)
-    {
-        return _depot.LoadModelAsync(modelId, parameters, cancellationToken);
-    }
-
-    /// <summary>
-    /// Unloads a model
-    /// </summary>
-    public Task UnloadModelAsync(string modelId, CancellationToken cancellationToken = default)
-    {
-        return _depot.UnloadModelAsync(modelId, cancellationToken);
-    }
-
-    /// <summary>
-    /// Deletes a model
-    /// </summary>
     public Task<bool> DeleteModelAsync(string modelId, CancellationToken cancellationToken = default)
     {
         return _depot.DeleteModelAsync(modelId, cancellationToken);
     }
 
-    /// <summary>
-    /// Sets an alias for a model
-    /// </summary>
-    public Task<LMModel> SetModelAliasAsync(
-        string modelId,
-        string alias,
-        CancellationToken cancellationToken = default)
+    public Task<LMModel> SetModelAliasAsync(string modelId, string? alias, CancellationToken cancellationToken = default)
     {
         return _depot.SetModelAliasAsync(modelId, alias, cancellationToken);
     }
 
     #endregion
 
-    #region Model Download and Repository
+    #region Collection Discovery
 
-    /// <summary>
-    /// Searches for models from external sources
-    /// </summary>
-    public Task<IReadOnlyList<ModelSearchResult>> SearchModelsAsync(ModelType? type = null, string? searchTerm = null, int limit = 10, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<LMCollection>> DiscoverCollectionsAsync(ModelType? type = null, string? searchTerm = null, int limit = 10, ModelSortField sort = ModelSortField.Downloads, CancellationToken cancellationToken = default)
     {
-        return _depot.SearchModelsAsync(type, searchTerm, limit, cancellationToken);
+        return _depot.DiscoverCollectionsAsync(type, searchTerm, limit, sort, cancellationToken);
     }
 
-    /// <summary>
-    /// Downloads a model from an external source
-    /// </summary>
+    public Task<LMCollection> GetCollectionInfoAsync(string collectionId, CancellationToken cancellationToken = default)
+    {
+        return _depot.GetCollectionInfoAsync(collectionId, cancellationToken);
+    }
+
+    public Task<IReadOnlyList<LMModel>> GetCollectionModelsAsync(string collectionId, CancellationToken cancellationToken = default)
+    {
+        return _depot.GetCollectionModelsAsync(collectionId, cancellationToken);
+    }
+
+    #endregion
+
+    #region Model Download Management
+
     public Task<LMModel> DownloadModelAsync(string modelId, IProgress<ModelDownloadProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         return _depot.DownloadModelAsync(modelId, progress, cancellationToken);
     }
 
-    /// <summary>
-    /// Pauses an active model download
-    /// </summary>
     public Task<bool> PauseDownloadAsync(string modelId, CancellationToken cancellationToken = default)
     {
         return _depot.PauseDownloadAsync(modelId, cancellationToken);
     }
 
-    /// <summary>
-    /// Resumes a paused model download
-    /// </summary>
     public Task<ModelDownloadState> ResumeDownloadAsync(string modelId, IProgress<ModelDownloadProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         return _depot.ResumeDownloadAsync(modelId, progress, cancellationToken);
     }
 
-    /// <summary>
-    /// Cancels an active or paused model download
-    /// </summary>
     public Task<bool> CancelDownloadAsync(string modelId, CancellationToken cancellationToken = default)
     {
         return _depot.CancelDownloadAsync(modelId, cancellationToken);
     }
 
-    /// <summary>
-    /// Gets the current status of a model download
-    /// </summary>
     public Task<ModelDownloadStatus?> GetDownloadStatusAsync(string modelId, CancellationToken cancellationToken = default)
     {
         return _depot.GetDownloadStatusAsync(modelId, cancellationToken);
     }
 
-    /// <summary>
-    /// Gets information about all active downloads
-    /// </summary>
     public IReadOnlyDictionary<string, ModelDownloadState> GetActiveDownloads()
     {
         return _depot.GetActiveDownloads();
     }
 
-    /// <summary>
-    /// Gets information about a model from an external source without downloading it
-    /// </summary>
-    public Task<LMModel> GetModelInfoAsync(string modelId, CancellationToken cancellationToken = default)
+    #endregion
+
+    #region Model Loading and Inference
+
+    public Task<bool> IsModelLoadedAsync(string modelId, CancellationToken cancellationToken = default)
     {
-        return _depot.GetModelInfoAsync(modelId, cancellationToken);
+        return _depot.IsModelLoadedAsync(modelId, cancellationToken);
     }
 
-    /// <summary>
-    /// Gets information about a model repository from an external source
-    /// </summary>
-    public Task<LMRepo> GetRepositoryInfoAsync(string repoId, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<LMModel>> GetLoadedModelsAsync(CancellationToken cancellationToken = default)
     {
-        return _depot.GetRepositoryInfoAsync(repoId, cancellationToken);
+        return _depot.GetLoadedModelsAsync(cancellationToken);
+    }
+
+    public Task<LMModel> LoadModelAsync(string modelId, Dictionary<string, object?>? parameters = null, CancellationToken cancellationToken = default)
+    {
+        return _depot.LoadModelAsync(modelId, parameters, cancellationToken);
+    }
+
+    public Task UnloadModelAsync(string modelId, CancellationToken cancellationToken = default)
+    {
+        return _depot.UnloadModelAsync(modelId, cancellationToken);
     }
 
     #endregion
 
     #region Text Generation
 
-    /// <summary>
-    /// Generates text using a loaded model
-    /// </summary>
     public Task<GenerationResponse> GenerateTextAsync(string modelId, GenerationRequest request, CancellationToken cancellationToken = default)
     {
         return _depot.GenerateTextAsync(modelId, request, cancellationToken);
     }
 
-    /// <summary>
-    /// Generates text using a loaded model with streaming output
-    /// </summary>
     public async IAsyncEnumerable<string> GenerateTextStreamAsync(
         string modelId,
         GenerationRequest request,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        // Force the request to be a streaming request
         request.Stream = true;
 
         await foreach (var token in _depot.GenerateTextStreamAsync(
@@ -257,9 +201,6 @@ public class HostService : IHostService, IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// Generates text using a loaded model with simple parameters
-    /// </summary>
     public Task<GenerationResponse> GenerateTextAsync(
         string modelId,
         string prompt,
@@ -283,9 +224,6 @@ public class HostService : IHostService, IAsyncDisposable
 
     #region Embeddings
 
-    /// <summary>
-    /// Generates embeddings for texts using a loaded model with a full request
-    /// </summary>
     public Task<EmbeddingResponse> GenerateEmbeddingsAsync(
         string modelId,
         EmbeddingRequest request,
@@ -294,9 +232,6 @@ public class HostService : IHostService, IAsyncDisposable
         return _depot.GenerateEmbeddingsAsync(modelId, request, cancellationToken);
     }
 
-    /// <summary>
-    /// Generates embeddings for texts using a loaded model
-    /// </summary>
     public Task<EmbeddingResponse> GenerateEmbeddingsAsync(
         string modelId,
         IReadOnlyList<string> texts,
@@ -314,15 +249,11 @@ public class HostService : IHostService, IAsyncDisposable
 
     #endregion
 
-    /// <summary>
-    /// Disposes resources
-    /// </summary>
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
             return;
 
-        // Dispose depot
         if (_depot is IDisposable disposableDepot)
         {
             disposableDepot.Dispose();
@@ -333,9 +264,6 @@ public class HostService : IHostService, IAsyncDisposable
     }
 }
 
-/// <summary>
-/// Forwarding logger provider that uses a single logger
-/// </summary>
 internal class ForwardingLoggerProvider : ILoggerProvider
 {
     private readonly ILogger _logger;

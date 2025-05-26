@@ -1,9 +1,4 @@
-﻿using LMSupplyDepots.Models;
-using LMSupplyDepots.ModelHub.Models;
-using LMSupplyDepots.ModelHub.Interfaces;
-using Microsoft.Extensions.DependencyInjection;
-using LMSupplyDepots.ModelHub;
-using LMSupplyDepots.ModelHub.HuggingFace;
+using LMSupplyDepots.External.HuggingFace.Models;
 
 namespace LMSupplyDepots.SDK;
 
@@ -17,6 +12,8 @@ public partial class LMSupplyDepot
     /// </summary>
     private IModelManager ModelManager => _serviceProvider.GetRequiredService<IModelManager>();
 
+    #region Local Model Management
+
     /// <summary>
     /// Lists available models with optional filtering
     /// </summary>
@@ -29,44 +26,109 @@ public partial class LMSupplyDepot
     }
 
     /// <summary>
-    /// Searches for models from external sources
+    /// Gets a model by its ID or alias
     /// </summary>
-    public async Task<IReadOnlyList<ModelSearchResult>> SearchModelsAsync(
-        ModelType? type = null,
-        string? searchTerm = null,
-        int limit = 10,
+    public async Task<LMModel?> GetModelAsync(
+        string modelKey,
         CancellationToken cancellationToken = default)
     {
-        // Search for repositories
-        var repos = await ModelManager.SearchRepositoriesAsync(type, searchTerm, limit, cancellationToken);
-
-        // Convert to ModelSearchResult objects 
-        var results = new List<ModelSearchResult>();
-        foreach (var repo in repos)
+        var model = await ModelManager.GetModelAsync(modelKey, cancellationToken);
+        if (model != null)
         {
-            // Get a recommended model from each repository
-            var model = repo.GetRecommendedModel();
-            if (model != null)
-            {
-                var downloadStatus = ModelManager.GetDownloadStatus(model.Id);
-
-                results.Add(new ModelSearchResult
-                {
-                    Model = model,
-                    SourceName = model.Registry,
-                    SourceId = model.Id,
-                    IsDownloaded = await ModelManager.IsModelDownloadedAsync(model.Id, cancellationToken),
-                    IsDownloading = downloadStatus == ModelDownloadStatus.Downloading,
-                    IsPaused = downloadStatus == ModelDownloadStatus.Paused
-                });
-            }
+            return model;
         }
 
-        return results;
+        return await ModelManager.GetModelByAliasAsync(modelKey, cancellationToken);
     }
 
     /// <summary>
-    /// Downloads a model from an external source
+    /// Gets a model by its alias
+    /// </summary>
+    public async Task<LMModel?> GetModelByAliasAsync(
+        string alias,
+        CancellationToken cancellationToken = default)
+    {
+        return await ModelManager.GetModelByAliasAsync(alias, cancellationToken);
+    }
+
+    /// <summary>
+    /// Checks if a model is downloaded
+    /// </summary>
+    public async Task<bool> IsModelDownloadedAsync(
+        string modelKey,
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedId = await ModelManager.ResolveModelKeyAsync(modelKey, cancellationToken);
+        return await ModelManager.IsModelDownloadedAsync(resolvedId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Deletes a model
+    /// </summary>
+    public async Task<bool> DeleteModelAsync(
+        string modelKey,
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedId = await ModelManager.ResolveModelKeyAsync(modelKey, cancellationToken);
+        return await ModelManager.DeleteModelAsync(resolvedId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Sets an alias for a model
+    /// </summary>
+    public async Task<LMModel> SetModelAliasAsync(
+        string modelKey,
+        string? alias,
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedId = await ModelManager.ResolveModelKeyAsync(modelKey, cancellationToken);
+        return await ModelManager.SetModelAliasAsync(resolvedId, alias, cancellationToken);
+    }
+
+    #endregion
+
+    #region Model Discovery
+
+    /// <summary>
+    /// Discovers model collections from external hubs
+    /// </summary>
+    public async Task<IReadOnlyList<LMCollection>> DiscoverCollectionsAsync(
+        ModelType? type = null,
+        string? searchTerm = null,
+        int limit = 10,
+        ModelSortField sort = ModelSortField.Downloads,
+        CancellationToken cancellationToken = default)
+    {
+        return await ModelManager.DiscoverCollectionsAsync(type, searchTerm, limit, sort, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets information about a model collection from an external hub
+    /// </summary>
+    public Task<LMCollection> GetCollectionInfoAsync(
+        string collectionKey,
+        CancellationToken cancellationToken = default)
+    {
+        return ModelManager.GetCollectionInfoAsync(collectionKey, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets all models from a collection
+    /// </summary>
+    public async Task<IReadOnlyList<LMModel>> GetCollectionModelsAsync(
+        string collectionKey,
+        CancellationToken cancellationToken = default)
+    {
+        var collection = await ModelManager.GetCollectionInfoAsync(collectionKey, cancellationToken);
+        return collection.GetAllModels();
+    }
+
+    #endregion
+
+    #region Model Download Management
+
+    /// <summary>
+    /// Downloads a specific model artifact from an external source
     /// </summary>
     public Task<LMModel> DownloadModelAsync(
         string modelKey,
@@ -127,83 +189,13 @@ public partial class LMSupplyDepot
         return ModelManager.GetActiveDownloads();
     }
 
-    /// <summary>
-    /// Gets information about a model from an external source without downloading it
-    /// </summary>
-    public Task<LMModel> GetModelInfoAsync(
-        string modelKey,
-        CancellationToken cancellationToken = default)
-    {
-        return ModelManager.GetExternalModelInfoAsync(modelKey, cancellationToken);
-    }
-
-    /// <summary>
-    /// Gets information about a model repository from an external source
-    /// </summary>
-    public Task<LMRepo> GetRepositoryInfoAsync(
-        string repoKey,
-        CancellationToken cancellationToken = default)
-    {
-        return ModelManager.GetRepositoryInfoAsync(repoKey, cancellationToken);
-    }
-
-    /// <summary>
-    /// Gets a model by its ID or alias
-    /// </summary>
-    public async Task<LMModel?> GetModelAsync(
-        string modelKey,
-        CancellationToken cancellationToken = default)
-    {
-        // First try by ID
-        var model = await ModelManager.GetModelAsync(modelKey, cancellationToken);
-        if (model != null)
-        {
-            return model;
-        }
-
-        // Then try by alias
-        return await ModelManager.GetModelByAliasAsync(modelKey, cancellationToken);
-    }
-
-    /// <summary>
-    /// Deletes a model
-    /// </summary>
-    public async Task<bool> DeleteModelAsync(
-        string modelKey,
-        CancellationToken cancellationToken = default)
-    {
-        var resolvedId = await ModelManager.ResolveModelKeyAsync(modelKey, cancellationToken);
-        return await ModelManager.DeleteModelAsync(resolvedId, cancellationToken);
-    }
-
-    /// <summary>
-    /// Sets an alias for a model
-    /// </summary>
-    public async Task<LMModel> SetModelAliasAsync(
-        string modelKey,
-        string? alias,
-        CancellationToken cancellationToken = default)
-    {
-        var resolvedId = await ModelManager.ResolveModelKeyAsync(modelKey, cancellationToken);
-        return await ModelManager.SetModelAliasAsync(resolvedId, alias, cancellationToken);
-    }
-
-    /// <summary>
-    /// Gets a model by its alias
-    /// </summary>
-    public async Task<LMModel?> GetModelByAliasAsync(
-        string alias,
-        CancellationToken cancellationToken = default)
-    {
-        return await ModelManager.GetModelByAliasAsync(alias, cancellationToken);
-    }
+    #endregion
 
     /// <summary>
     /// Configures ModelHub services
     /// </summary>
     private void ConfigureModelHubServices(IServiceCollection services, string modelsPath)
     {
-        // Add ModelHub services
         services.AddModelHub(options =>
         {
             options.DataPath = modelsPath;
@@ -212,7 +204,6 @@ public partial class LMSupplyDepot
             options.MinimumFreeDiskSpace = _options.MinimumFreeDiskSpace;
         });
 
-        // Add HuggingFace downloader
         services.AddHuggingFaceDownloader(options =>
         {
             options.ApiToken = _options.HuggingFaceApiToken;

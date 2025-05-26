@@ -1,8 +1,16 @@
-@baseUrl = https://localhost:7212
+@baseUrl = http://localhost:5181
 @apiBase = {{baseUrl}}/api
 
 ### List available models
 GET {{apiBase}}/models
+Accept: application/json
+
+### List models with type filter
+GET {{apiBase}}/models?type=TextGeneration
+Accept: application/json
+
+### List models with search term
+GET {{apiBase}}/models?search=llama
 Accept: application/json
 
 ### Show model details
@@ -13,20 +21,24 @@ Content-Type: application/json
   "name": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M"
 }
 
-### Delete a model
-DELETE {{apiBase}}/delete
+### Show model by alias
+POST {{apiBase}}/show
 Content-Type: application/json
 
 {
   "name": "llama-3-8b"
 }
 
-### Search for models (UNIFIED - no more system/search conflict)
-GET {{apiBase}}/search?q=embedding&limit=5
+### Get model by alias (using query string)
+GET {{apiBase}}/models/alias?alias=llama-3-8b
 Accept: application/json
 
-### Search by type
-GET {{apiBase}}/search?type=TextGeneration&limit=5
+### Check if model is downloaded (using query string)
+GET {{apiBase}}/models/downloaded?model=hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
+Accept: application/json
+
+### Check if model is downloaded by alias
+GET {{apiBase}}/models/downloaded?model=llama-3-8b
 Accept: application/json
 
 ### Set model alias
@@ -36,4 +48,12 @@ Content-Type: application/json
 {
   "name": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M",
   "alias": "llama-3-8b"
+}
+
+### Delete a model
+DELETE {{apiBase}}/delete
+Content-Type: application/json
+
+{
+  "name": "llama-3-8b"
 }

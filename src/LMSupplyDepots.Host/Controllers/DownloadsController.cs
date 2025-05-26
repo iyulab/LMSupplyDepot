@@ -1,12 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using LMSupplyDepots.ModelHub.Models;
-using LMSupplyDepots.Models;
-using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Mvc;
 
 namespace LMSupplyDepots.Host.Controllers;
 
 /// <summary>
-/// Controller for model download operations
+/// Controller for model artifact download operations
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -15,9 +12,6 @@ public class DownloadsController : ControllerBase
     private readonly IHostService _hostService;
     private readonly ILogger<DownloadsController> _logger;
 
-    /// <summary>
-    /// Initializes a new instance of the DownloadsController
-    /// </summary>
     public DownloadsController(IHostService hostService, ILogger<DownloadsController> logger)
     {
         _hostService = hostService;
@@ -45,144 +39,180 @@ public class DownloadsController : ControllerBase
     /// <summary>
     /// Gets the status of a specific download
     /// </summary>
-    [HttpGet("{modelId}/status")]
-    public async Task<ActionResult<ModelDownloadStatus?>> GetDownloadStatus(string modelId)
+    [HttpGet("status")]
+    public async Task<ActionResult<ModelDownloadStatus?>> GetDownloadStatus(
+        [FromQuery] string model,
+        CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrEmpty(model))
+        {
+            return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
+        }
+
         try
         {
-            var status = await _hostService.GetDownloadStatusAsync(modelId);
+            var status = await _hostService.GetDownloadStatusAsync(model, cancellationToken);
             return Ok(status);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving download status for model {ModelId}", modelId);
-            return StatusCode(500, $"An error occurred while retrieving download status for model {modelId}");
+            _logger.LogError(ex, "Error retrieving download status for model {Model}", model);
+            return StatusCode(500, new ErrorResponse
+            {
+                Error = $"An error occurred while retrieving download status for model {model}"
+            });
         }
     }
 
     /// <summary>
-    /// Starts downloading a model
+    /// Starts downloading a specific model artifact
     /// </summary>
-    [HttpPost("{modelId}")]
-    public async Task<ActionResult<LMModel>> DownloadModel(string modelId)
+    [HttpPost("start")]
+    public async Task<ActionResult<LMModel>> StartDownload(
+        [FromBody] ModelDownloadRequest request,
+        CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrEmpty(request.Model))
+        {
+            return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
+        }
+
         try
         {
-            // We can't use IProgress directly with API controllers, so we create a simple progress reporter
             var progressTracker = new ModelDownloadProgressTracker();
-
-            // Start the download
-            var model = await _hostService.DownloadModelAsync(modelId, progressTracker);
+            var model = await _hostService.DownloadModelAsync(request.Model, progressTracker, cancellationToken);
             return Ok(model);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error downloading model {ModelId}", modelId);
-            return StatusCode(500, $"An error occurred while downloading model {modelId}: {ex.Message}");
+            _logger.LogError(ex, "Error downloading model {Model}", request.Model);
+            return StatusCode(500, new ErrorResponse
+            {
+                Error = $"An error occurred while downloading model {request.Model}: {ex.Message}"
+            });
         }
     }
 
     /// <summary>
     /// Pauses a download
     /// </summary>
-    [HttpPost("{modelId}/pause")]
-    public async Task<ActionResult> PauseDownload(string modelId)
+    [HttpPost("pause")]
+    public async Task<ActionResult> PauseDownload(
+        [FromBody] ModelActionRequest request,
+        CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrEmpty(request.Model))
+        {
+            return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
+        }
+
         try
         {
-            bool result = await _hostService.PauseDownloadAsync(modelId);
+            bool result = await _hostService.PauseDownloadAsync(request.Model, cancellationToken);
             if (!result)
             {
-                return BadRequest($"Failed to pause download for model {modelId}");
+                return BadRequest(new ErrorResponse
+                {
+                    Error = $"Failed to pause download for model {request.Model}"
+                });
             }
-            return Ok();
+            return Ok(new { Message = $"Download paused for model {request.Model}" });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error pausing download for model {ModelId}", modelId);
-            return StatusCode(500, $"An error occurred while pausing download for model {modelId}: {ex.Message}");
+            _logger.LogError(ex, "Error pausing download for model {Model}", request.Model);
+            return StatusCode(500, new ErrorResponse
+            {
+                Error = $"An error occurred while pausing download for model {request.Model}: {ex.Message}"
+            });
         }
     }
 
     /// <summary>
     /// Resumes a paused download
     /// </summary>
-    [HttpPost("{modelId}/resume")]
-    public async Task<ActionResult<ModelDownloadState>> ResumeDownload(string modelId)
+    [HttpPost("resume")]
+    public async Task<ActionResult<ModelDownloadState>> ResumeDownload(
+        [FromBody] ModelActionRequest request,
+        CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrEmpty(request.Model))
+        {
+            return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
+        }
+
         try
         {
-            // Create a progress tracker
             var progressTracker = new ModelDownloadProgressTracker();
-
-            // Resume the download
-            var state = await _hostService.ResumeDownloadAsync(modelId, progressTracker);
+            var state = await _hostService.ResumeDownloadAsync(request.Model, progressTracker, cancellationToken);
             return Ok(state);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error resuming download for model {ModelId}", modelId);
-            return StatusCode(500, $"An error occurred while resuming download for model {modelId}: {ex.Message}");
+            _logger.LogError(ex, "Error resuming download for model {Model}", request.Model);
+            return StatusCode(500, new ErrorResponse
+            {
+                Error = $"An error occurred while resuming download for model {request.Model}: {ex.Message}"
+            });
         }
     }
 
     /// <summary>
     /// Cancels a download
     /// </summary>
-    [HttpPost("{modelId}/cancel")]
-    public async Task<ActionResult> CancelDownload(string modelId)
+    [HttpPost("cancel")]
+    public async Task<ActionResult> CancelDownload(
+        [FromBody] ModelActionRequest request,
+        CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrEmpty(request.Model))
+        {
+            return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
+        }
+
         try
         {
-            bool result = await _hostService.CancelDownloadAsync(modelId);
+            bool result = await _hostService.CancelDownloadAsync(request.Model, cancellationToken);
             if (!result)
             {
-                return BadRequest($"Failed to cancel download for model {modelId}");
+                return BadRequest(new ErrorResponse
+                {
+                    Error = $"Failed to cancel download for model {request.Model}"
+                });
             }
-            return Ok();
+            return Ok(new { Message = $"Download cancelled for model {request.Model}" });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error cancelling download for model {ModelId}", modelId);
-            return StatusCode(500, $"An error occurred while cancelling download for model {modelId}: {ex.Message}");
+            _logger.LogError(ex, "Error cancelling download for model {Model}", request.Model);
+            return StatusCode(500, new ErrorResponse
+            {
+                Error = $"An error occurred while cancelling download for model {request.Model}: {ex.Message}"
+            });
         }
     }
+}
 
+/// <summary>
+/// Request model for starting a download
+/// </summary>
+public class ModelDownloadRequest
+{
     /// <summary>
-    /// Gets information about a model without downloading it
+    /// Model ID or alias to download
     /// </summary>
-    [HttpGet("{modelId}/info")]
-    public async Task<ActionResult<LMModel>> GetModelInfo(string modelId)
-    {
-        try
-        {
-            var model = await _hostService.GetModelInfoAsync(modelId);
-            return Ok(model);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting model info for {ModelId}", modelId);
-            return StatusCode(500, $"An error occurred while getting model info for {modelId}: {ex.Message}");
-        }
-    }
+    public string Model { get; set; } = string.Empty;
+}
 
+/// <summary>
+/// Request model for download actions (pause, resume, cancel)
+/// </summary>
+public class ModelActionRequest
+{
     /// <summary>
-    /// Gets information about a repository
+    /// Model ID or alias
     /// </summary>
-    [HttpGet("repository/{repoId}")]
-    public async Task<ActionResult<LMRepo>> GetRepositoryInfo(string repoId)
-    {
-        try
-        {
-            var repo = await _hostService.GetRepositoryInfoAsync(repoId);
-            return Ok(repo);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting repository info for {RepoId}", repoId);
-            return StatusCode(500, $"An error occurred while getting repository info for {repoId}: {ex.Message}");
-        }
-    }
+    public string Model { get; set; } = string.Empty;
 }
 
 /// <summary>

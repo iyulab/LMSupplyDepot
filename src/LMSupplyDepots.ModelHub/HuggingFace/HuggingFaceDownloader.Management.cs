@@ -1,4 +1,4 @@
-﻿using LMSupplyDepots.ModelHub.Utils;
+using LMSupplyDepots.ModelHub.Utils;
 using LMSupplyDepots.Utils;
 using System.Text.Json;
 
@@ -16,7 +16,6 @@ public partial class HuggingFaceDownloader
     {
         _logger.LogInformation("Attempting to pause download for model {ModelId}", sourceId);
 
-        // Check if the download is active
         var downloadStatus = await GetDownloadStatusAsync(sourceId, cancellationToken);
         if (downloadStatus != ModelDownloadStatus.Downloading)
         {
@@ -26,15 +25,12 @@ public partial class HuggingFaceDownloader
 
         try
         {
-            // Get the download directory path
             var normalizedId = HuggingFaceHelper.NormalizeSourceId(sourceId);
             var modelType = await HuggingFaceHelper.DetermineModelTypeAsync(normalizedId, _client.Value, cancellationToken);
             var targetDirectory = _fileSystemRepository.GetModelDirectoryPath(sourceId, modelType);
 
-            // Create a paused download status file with current progress
             var pausedStatusFilePath = _fileSystemRepository.GetDownloadStatusFilePath(sourceId, modelType);
 
-            // Check if we have an existing status file to determine progress
             long totalSize = 0;
 
             if (File.Exists(pausedStatusFilePath))
@@ -42,7 +38,6 @@ public partial class HuggingFaceDownloader
                 var content = await File.ReadAllTextAsync(pausedStatusFilePath, cancellationToken);
                 if (long.TryParse(content.Trim(), out totalSize))
                 {
-                    // Update the status file to indicate it's paused
                     var statusInfo = new
                     {
                         ModelId = sourceId,
@@ -50,7 +45,6 @@ public partial class HuggingFaceDownloader
                         PausedAt = DateTime.UtcNow,
                         TargetDirectory = targetDirectory,
                         TotalSize = totalSize,
-                        // Calculate the downloaded size based on existing files
                         DownloadedSize = HuggingFaceHelper.CalculateDownloadedSize(targetDirectory)
                     };
 
@@ -62,7 +56,6 @@ public partial class HuggingFaceDownloader
                 }
             }
 
-            // Create a new status file with basic information
             var newStatusInfo = new
             {
                 ModelId = sourceId,
@@ -94,11 +87,9 @@ public partial class HuggingFaceDownloader
 
         try
         {
-            // Get the model type
             var normalizedId = HuggingFaceHelper.NormalizeSourceId(sourceId);
             var modelType = await HuggingFaceHelper.DetermineModelTypeAsync(normalizedId, _client.Value, cancellationToken);
 
-            // Remove the status file if it exists
             var statusFilePath = _fileSystemRepository.GetDownloadStatusFilePath(sourceId, modelType);
             if (File.Exists(statusFilePath))
             {
@@ -106,7 +97,6 @@ public partial class HuggingFaceDownloader
                 _logger.LogInformation("Removed download status file for model {ModelId}", sourceId);
             }
 
-            // Check if the directory was created and clean it up
             var targetDirectory = _fileSystemRepository.GetModelDirectoryPath(sourceId, modelType);
             if (Directory.Exists(targetDirectory))
             {
@@ -116,7 +106,6 @@ public partial class HuggingFaceDownloader
                                Path.GetExtension(f) == ".part" ||
                                Path.GetExtension(f) == ".tmp"))
                 {
-                    // Only delete the directory if it only contains temporary files
                     try
                     {
                         Directory.Delete(targetDirectory, true);
@@ -154,7 +143,6 @@ public partial class HuggingFaceDownloader
         {
             var normalizedId = HuggingFaceHelper.NormalizeSourceId(sourceId);
 
-            // Extract artifact name if present in the source ID
             string? artifactName = null;
             if (sourceId.Contains('/'))
             {
@@ -165,27 +153,22 @@ public partial class HuggingFaceDownloader
                 }
             }
 
-            // First check if the model is already downloaded
             var existingModel = await _fileSystemRepository.GetModelAsync(sourceId, cancellationToken);
             if (existingModel != null && existingModel.IsLocal)
             {
                 return ModelDownloadStatus.Completed;
             }
 
-            // Check for model types to find the status file
             foreach (var modelType in Enum.GetValues<ModelType>())
             {
-                // First try to find status file in the model directory
                 var modelDir = _fileSystemRepository.GetModelDirectoryPath(sourceId, modelType);
 
                 if (Directory.Exists(modelDir))
                 {
-                    // Try to find status file by artifact name
                     var statusFiles = Directory.GetFiles(modelDir, $"*{FileSystemHelper.DownloadStatusFileExtension}");
 
                     if (statusFiles.Length > 0)
                     {
-                        // If we have a specific artifact name, look for that first
                         string? statusFilePath = null;
 
                         if (!string.IsNullOrEmpty(artifactName))
@@ -199,13 +182,11 @@ public partial class HuggingFaceDownloader
                             }
                         }
 
-                        // If we didn't find a specific file, use the first one
                         if (statusFilePath == null && statusFiles.Length > 0)
                         {
                             statusFilePath = statusFiles[0];
                         }
 
-                        // Check the status file if we found one
                         if (statusFilePath != null && File.Exists(statusFilePath))
                         {
                             return await ParseDownloadStatusFileAsync(statusFilePath, modelDir, cancellationToken);
@@ -213,7 +194,6 @@ public partial class HuggingFaceDownloader
                     }
                 }
 
-                // Fallback to the old path
                 var oldStatusFilePath = _fileSystemRepository.GetDownloadStatusFilePath(sourceId, modelType, artifactName);
                 if (File.Exists(oldStatusFilePath))
                 {
@@ -221,7 +201,6 @@ public partial class HuggingFaceDownloader
                 }
             }
 
-            // Check the global downloads directory for status files matching the artifact name
             if (!string.IsNullOrEmpty(artifactName))
             {
                 var downloadsDir = Path.Combine(_hubOptions.DataPath, FileSystemHelper.DownloadsDirectory);
@@ -237,7 +216,6 @@ public partial class HuggingFaceDownloader
                 }
             }
 
-            // No status file found
             return null;
         }
         catch (Exception ex)
@@ -259,33 +237,27 @@ public partial class HuggingFaceDownloader
         {
             var statusContent = await File.ReadAllTextAsync(statusFilePath, cancellationToken);
 
-            // If it contains a "Paused" status, it's paused
             if (statusContent.Contains("\"Status\"") &&
                 statusContent.Contains("\"Paused\""))
             {
                 return ModelDownloadStatus.Paused;
             }
 
-            // If it's a JSON structure with other status, check that
             if (statusContent.Contains("\"Status\"") &&
                 statusContent.Contains("\"Failed\""))
             {
                 return ModelDownloadStatus.Failed;
             }
 
-            // If it's a JSON structure with no status or other status, assume it's downloading
             if (statusContent.StartsWith("{") && statusContent.EndsWith("}"))
             {
                 return ModelDownloadStatus.Downloading;
             }
 
-            // If it just contains a number (total size), it's an active download
             if (long.TryParse(statusContent.Trim(), out _))
             {
-                // Check if there's been recent activity in the target directory
                 if (!string.IsNullOrEmpty(targetDir) && Directory.Exists(targetDir))
                 {
-                    // If any file was modified in the last 30 seconds, consider it active
                     var recentFiles = Directory.GetFiles(targetDir, "*.*", SearchOption.AllDirectories)
                         .Where(f => (DateTime.UtcNow - new FileInfo(f).LastWriteTimeUtc).TotalSeconds < 30)
                         .Any();
@@ -301,7 +273,6 @@ public partial class HuggingFaceDownloader
             _logger.LogWarning(ex, "Error parsing download status file: {FilePath}", statusFilePath);
         }
 
-        // If we can't parse the status file, default to paused
         return ModelDownloadStatus.Paused;
     }
 }

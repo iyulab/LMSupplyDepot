@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using LMSupplyDepots.Interfaces;
 using LMSupplyDepots.ModelHub.Utils;
@@ -248,66 +248,15 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
     }
 
     /// <summary>
-    /// Gets the path to the download status file
+    /// Gets the path to the download status file (simplified)
     /// </summary>
     public string GetDownloadStatusFilePath(string modelId, ModelType modelType, string? artifactName = null)
     {
-        // If an artifact name is provided, use it for the status file
-        if (!string.IsNullOrEmpty(artifactName))
-        {
-            // Get the target model directory
-            var modelDir = GetModelDirectoryPath(modelId, modelType);
-            Directory.CreateDirectory(modelDir);
+        var downloadsDir = Path.Combine(_baseDirectory, ".downloads");
+        Directory.CreateDirectory(downloadsDir);
 
-            // Create status file alongside where the model will be downloaded
-            var sanitizedArtifactName = artifactName.Replace(':', '_').Replace('/', '_');
-            return Path.Combine(modelDir, $"{sanitizedArtifactName}{FileSystemHelper.DownloadStatusFileExtension}");
-        }
-
-        // Check if we have an artifact name in the model ID
-        string extractedArtifactName = null;
-
-        if (modelId.Contains('/'))
-        {
-            var parts = modelId.Split('/');
-            if (parts.Length >= 3)
-            {
-                // Format is likely registry:owner/repo/artifact
-                extractedArtifactName = parts[parts.Length - 1];
-
-                // Create status file alongside where the model will be downloaded
-                if (!string.IsNullOrEmpty(extractedArtifactName))
-                {
-                    var modelDir = GetModelDirectoryPath(modelId, modelType);
-                    Directory.CreateDirectory(modelDir);
-
-                    var sanitizedArtifactName = extractedArtifactName.Replace(':', '_').Replace('/', '_');
-                    return Path.Combine(modelDir, $"{sanitizedArtifactName}{FileSystemHelper.DownloadStatusFileExtension}");
-                }
-            }
-        }
-
-        // For full model repositories without a specific artifact
-        if (ModelIdentifier.TryParse(modelId, out var identifier))
-        {
-            // Apply the model type from parameter
-            identifier = identifier.WithModelType(modelType);
-
-            // Place directly in the model directory
-            var modelDir = FileSystemHelper.GetModelDirectoryPath(identifier, _baseDirectory);
-            Directory.CreateDirectory(modelDir);
-
-            var fileName = $"{identifier.ModelName}{FileSystemHelper.DownloadStatusFileExtension}";
-            return Path.Combine(modelDir, fileName);
-        }
-
-        // Legacy fallback for backward compatibility - place in .downloads directory
-        var typeDashCase = modelType.ToString().ToLowerInvariant().Replace("_", "-");
-        var downloadDir = Path.Combine(_baseDirectory, FileSystemHelper.DownloadsDirectory);
-        Directory.CreateDirectory(downloadDir);
-
-        var safeFileName = modelId.Replace(':', '_').Replace('/', '_');
-        return Path.Combine(downloadDir, $"{safeFileName}{FileSystemHelper.DownloadStatusFileExtension}");
+        var safeFileName = modelId.ToFileNameSafe();
+        return Path.Combine(downloadsDir, $"{safeFileName}.download");
     }
 
     /// <summary>
@@ -324,7 +273,34 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
 
         // Legacy fallback for backward compatibility
         var typeDashCase = modelType.ToString().ToLowerInvariant().Replace("_", "-");
-        return Path.Combine(_baseDirectory, "models", typeDashCase, "local", modelId);
+
+        // If model ID has repo/artifact format, handle accordingly
+        if (modelId.Contains('/'))
+        {
+            var parts = modelId.Split('/');
+
+            if (parts.Length >= 3 && modelId.Contains(':'))
+            {
+                // hf:owner/repo/artifact format
+                var registryPart = parts[0];
+                var registry = registryPart.Contains(':') ? registryPart.Split(':')[0] : "hf";
+                var publisher = registryPart.Contains(':') ? registryPart.Split(':')[1] : parts[0];
+                var repo = parts[1];
+
+                return Path.Combine(_baseDirectory, "models", typeDashCase, publisher, repo);
+            }
+            else if (parts.Length >= 2)
+            {
+                // owner/repo format
+                var publisher = parts[0];
+                var repo = parts[1];
+
+                return Path.Combine(_baseDirectory, "models", typeDashCase, publisher, repo);
+            }
+        }
+
+        // If no clear structure, use a simple path
+        return Path.Combine(_baseDirectory, "models", typeDashCase, "local", modelId.ToFileNameSafe());
     }
 
     /// <summary>

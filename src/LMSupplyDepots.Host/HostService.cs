@@ -8,50 +8,15 @@ namespace LMSupplyDepots.Host;
 public class HostService : IHostService, IAsyncDisposable
 {
     private readonly ILogger<HostService> _logger;
-    private readonly HostOptions _options;
     private readonly LMSupplyDepot _depot;
     private bool _disposed;
 
-    public HostService(ILogger<HostService> logger, IOptions<HostOptions> options)
+    public HostService(ILogger<HostService> logger, IOptions<LMSupplyDepotOptions> options)
     {
         _logger = logger;
-        _options = options.Value;
 
-        var sdkOptions = new LMSupplyDepotOptions
-        {
-            DataPath = _options.DataPath,
-            MaxConcurrentDownloads = _options.MaxConcurrentDownloads,
-            VerifyChecksums = _options.VerifyChecksums,
-            MinimumFreeDiskSpace = _options.MinimumFreeDiskSpace,
-            HuggingFaceApiToken = _options.HuggingFaceApiToken,
-            DefaultTimeoutMs = _options.DefaultTimeoutMs,
-            MaxConcurrentOperations = _options.MaxConcurrentOperations,
-            EnableMetrics = _options.EnableMetrics,
-            EnableModelCaching = _options.EnableModelCaching,
-            MaxCachedModels = _options.MaxCachedModels,
-            TempDirectory = _options.TempDirectory,
-            ForceCpuOnly = _options.ForceCpuOnly
-        };
-
-        if (_options.LLamaOptions != null)
-        {
-            sdkOptions.LLamaOptions = new LLamaOptions
-            {
-                Threads = _options.LLamaOptions.Threads,
-                GpuLayers = _options.LLamaOptions.GpuLayers,
-                ContextSize = _options.LLamaOptions.ContextSize,
-                BatchSize = _options.LLamaOptions.BatchSize,
-                UseMemoryMapping = _options.LLamaOptions.UseMemoryMapping,
-                Seed = _options.LLamaOptions.Seed
-            };
-
-            if (_options.LLamaOptions.AntiPrompt != null)
-            {
-                sdkOptions.LLamaOptions.AntiPrompt = new List<string>(_options.LLamaOptions.AntiPrompt);
-            }
-        }
-
-        _depot = new LMSupplyDepot(sdkOptions, CreateLoggerFactory(logger));
+        var _options = options.Value;
+        _depot = new LMSupplyDepot(_options, CreateLoggerFactory(logger));
         _logger.LogInformation("LMSupplyDepots Host Service initialized with models directory: {ModelsDirectory}", _options.DataPath);
     }
 
@@ -128,7 +93,7 @@ public class HostService : IHostService, IAsyncDisposable
         return _depot.PauseDownloadAsync(modelId, cancellationToken);
     }
 
-    public Task<ModelDownloadState> ResumeDownloadAsync(string modelId, IProgress<ModelDownloadProgress>? progress = null, CancellationToken cancellationToken = default)
+    public Task<LMModel> ResumeDownloadAsync(string modelId, IProgress<ModelDownloadProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         return _depot.ResumeDownloadAsync(modelId, progress, cancellationToken);
     }
@@ -143,9 +108,9 @@ public class HostService : IHostService, IAsyncDisposable
         return _depot.GetDownloadStatusAsync(modelId, cancellationToken);
     }
 
-    public IReadOnlyDictionary<string, ModelDownloadState> GetActiveDownloads()
+    public Task<ModelDownloadProgress?> GetDownloadProgressAsync(string modelId, CancellationToken cancellationToken = default)
     {
-        return _depot.GetActiveDownloads();
+        return _depot.GetDownloadProgressAsync(modelId, cancellationToken);
     }
 
     #endregion

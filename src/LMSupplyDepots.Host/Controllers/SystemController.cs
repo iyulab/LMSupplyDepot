@@ -11,7 +11,7 @@ public class SystemController : ControllerBase
 {
     private readonly IHostService _hostService;
     private readonly ILogger<SystemController> _logger;
-    private readonly HostOptions _options;
+    private readonly LMSupplyDepotOptions _options;
 
     /// <summary>
     /// Initializes a new instance of the SystemController
@@ -19,7 +19,7 @@ public class SystemController : ControllerBase
     public SystemController(
         IHostService hostService,
         ILogger<SystemController> logger,
-        Microsoft.Extensions.Options.IOptions<HostOptions> options)
+        IOptions<LMSupplyDepotOptions> options)
     {
         _hostService = hostService;
         _logger = logger;

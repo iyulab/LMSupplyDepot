@@ -5,7 +5,7 @@ namespace LMSupplyDepots.ModelHub.Services;
 /// <summary>
 /// Implementation of IModelManager that coordinates model operations.
 /// </summary>
-public class ModelManager : IModelManager, IDisposable
+public partial class ModelManager : IModelManager, IDisposable
 {
     private readonly ModelHubOptions _options;
     private readonly ILogger<ModelManager> _logger;
@@ -13,7 +13,6 @@ public class ModelManager : IModelManager, IDisposable
     private readonly FileSystemModelRepository _fileSystemRepository;
     private readonly IEnumerable<IModelDownloader> _downloaders;
     private readonly DownloadManager _downloadManager;
-    private readonly ConcurrentDictionary<string, Task<LMModel>> _activeDownloads = new();
     private readonly ConcurrentDictionary<string, LMCollection> _collectionCache = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
 
@@ -55,14 +54,11 @@ public class ModelManager : IModelManager, IDisposable
         return _repository.ListModelsAsync(type, searchTerm, skip, take, cancellationToken);
     }
 
-    public Task<bool> DeleteModelAsync(string modelId, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteModelAsync(string modelId, CancellationToken cancellationToken = default)
     {
-        if (_downloadManager.IsDownloading(modelId) || _downloadManager.IsPaused(modelId))
-        {
-            _downloadManager.CancelDownloadAsync(modelId, cancellationToken).Wait(cancellationToken);
-        }
-
-        return _repository.DeleteModelAsync(modelId, cancellationToken);
+        // Cancel any active download first
+        await _downloadManager.CancelDownloadAsync(modelId, cancellationToken);
+        return await _repository.DeleteModelAsync(modelId, cancellationToken);
     }
 
     public async Task<LMModel> SetModelAliasAsync(
@@ -190,41 +186,24 @@ public class ModelManager : IModelManager, IDisposable
         IProgress<ModelDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        if (_activeDownloads.TryGetValue(modelId, out var existingTask))
-        {
-            _logger.LogInformation("Model {ModelId} is already being downloaded, returning existing task", modelId);
-            return await existingTask;
-        }
-
+        // Check if already exists
         var existingModel = await _repository.GetModelAsync(modelId, cancellationToken);
         if (existingModel != null)
         {
-            _logger.LogInformation("Model {ModelId} already exists in the repository", modelId);
+            _logger.LogInformation("Model {ModelId} already exists", modelId);
             return existingModel;
         }
 
+        // Get model info and target directory
         var downloader = GetDownloader(modelId);
-        if (downloader == null)
-        {
-            throw new InvalidOperationException($"No downloader can handle model ID: {modelId}");
-        }
-
         var modelInfo = await downloader.GetModelInfoAsync(modelId, cancellationToken);
-
         var targetDirectory = _fileSystemRepository.GetModelDirectoryPath(modelInfo.Id, modelInfo.Type);
 
-        var downloadTask = StartDownloadAsync(downloader, modelId, modelInfo.Type, targetDirectory, progress, cancellationToken);
+        // Download using the download manager
+        var result = await _downloadManager.DownloadModelAsync(modelId, targetDirectory, progress, cancellationToken);
 
-        _activeDownloads[modelId] = downloadTask;
-
-        try
-        {
-            return await downloadTask;
-        }
-        finally
-        {
-            _activeDownloads.TryRemove(modelId, out _);
-        }
+        // Save to repository
+        return await _repository.SaveModelAsync(result, cancellationToken);
     }
 
     public async Task<bool> PauseDownloadAsync(string modelId, CancellationToken cancellationToken = default)
@@ -232,12 +211,17 @@ public class ModelManager : IModelManager, IDisposable
         return await _downloadManager.PauseDownloadAsync(modelId, cancellationToken);
     }
 
-    public async Task<ModelDownloadState> ResumeDownloadAsync(
+    public async Task<LMModel> ResumeDownloadAsync(
         string modelId,
         IProgress<ModelDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return await _downloadManager.ResumeDownloadAsync(modelId, progress, cancellationToken);
+        // Get downloader and resume download
+        var downloader = GetDownloader(modelId);
+        var result = await downloader.ResumeDownloadAsync(modelId, progress, cancellationToken);
+
+        // Save the result to repository
+        return await _repository.SaveModelAsync(result, cancellationToken);
     }
 
     public async Task<bool> CancelDownloadAsync(string modelId, CancellationToken cancellationToken = default)
@@ -250,9 +234,9 @@ public class ModelManager : IModelManager, IDisposable
         return _downloadManager.GetDownloadStatus(modelId);
     }
 
-    public IReadOnlyDictionary<string, ModelDownloadState> GetActiveDownloads()
+    public ModelDownloadProgress? GetDownloadProgress(string modelId)
     {
-        return _downloadManager.ActiveDownloads;
+        return _downloadManager.GetDownloadProgress(modelId);
     }
 
     #endregion
@@ -285,9 +269,10 @@ public class ModelManager : IModelManager, IDisposable
         }
     }
 
-    private IModelDownloader? GetDownloader(string modelId)
+    private IModelDownloader GetDownloader(string modelId)
     {
-        return _downloaders.FirstOrDefault(d => d.CanHandle(modelId));
+        return _downloaders.FirstOrDefault(d => d.CanHandle(modelId))
+            ?? throw new ModelSourceNotFoundException(modelId);
     }
 
     private IModelDownloader? GetDownloaderForCollection(string collectionId)
@@ -306,126 +291,6 @@ public class ModelManager : IModelManager, IDisposable
         return GetDownloader(modelId);
     }
 
-    private async Task<LMModel> StartDownloadAsync(
-        IModelDownloader downloader,
-        string modelId,
-        ModelType modelType,
-        string targetDirectory,
-        IProgress<ModelDownloadProgress>? progress,
-        CancellationToken cancellationToken)
-    {
-        var downloadState = await _downloadManager.StartDownloadAsync(
-            modelId,
-            modelType,
-            targetDirectory,
-            progress,
-            cancellationToken);
-
-        var complete = false;
-        LMModel? result = null;
-        Exception? error = null;
-
-        using var timer = new System.Timers.Timer(500);
-        using var waitHandle = new ManualResetEvent(false);
-
-        timer.Elapsed += async (sender, e) =>
-        {
-            try
-            {
-                var state = _downloadManager.GetDownloadState(modelId);
-
-                if (state == null ||
-                    state.Status == ModelDownloadStatus.Completed ||
-                    state.Status == ModelDownloadStatus.Failed ||
-                    state.Status == ModelDownloadStatus.Cancelled)
-                {
-                    if (state?.Status == ModelDownloadStatus.Completed)
-                    {
-                        result = await _repository.GetModelAsync(modelId, cancellationToken);
-
-                        if (result == null)
-                        {
-                            try
-                            {
-                                var modelFiles = Directory.GetFiles(targetDirectory, "*.gguf");
-                                if (modelFiles.Length > 0)
-                                {
-                                    var mainModelFile = modelFiles.OrderByDescending(f => new FileInfo(f).Length).First();
-                                    var jsonFile = Path.ChangeExtension(mainModelFile, ".json");
-
-                                    if (File.Exists(jsonFile))
-                                    {
-                                        var json = await File.ReadAllTextAsync(jsonFile, cancellationToken);
-                                        result = JsonHelper.Deserialize<LMModel>(json);
-
-                                        if (result != null)
-                                        {
-                                            result = await _repository.SaveModelAsync(result, cancellationToken);
-                                        }
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogError(ex, "Error loading model files for {ModelId}", modelId);
-                                error = ex;
-                            }
-                        }
-                    }
-                    else if (state?.Status == ModelDownloadStatus.Failed)
-                    {
-                        string errorMessage = state.Message ?? "Unknown error";
-
-                        if (errorMessage.Contains("authentication", StringComparison.OrdinalIgnoreCase) ||
-                            errorMessage.Contains("unauthorized", StringComparison.OrdinalIgnoreCase) ||
-                            errorMessage.Contains("API token", StringComparison.OrdinalIgnoreCase))
-                        {
-                            error = new ModelDownloadException(
-                                modelId,
-                                "This model requires authentication. Please provide a valid API token in the settings.");
-                        }
-                        else
-                        {
-                            error = new ModelDownloadException(modelId, errorMessage);
-                        }
-                    }
-                    else if (state?.Status == ModelDownloadStatus.Cancelled)
-                    {
-                        error = new OperationCanceledException($"Download cancelled for model {modelId}");
-                    }
-
-                    complete = true;
-                    waitHandle.Set();
-                    timer.Stop();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error checking download status for {ModelId}", modelId);
-                error = ex;
-                complete = true;
-                waitHandle.Set();
-                timer.Stop();
-            }
-        };
-
-        timer.Start();
-
-        await Task.Run(() => waitHandle.WaitOne(), cancellationToken);
-
-        if (error != null)
-        {
-            throw error;
-        }
-
-        if (result == null)
-        {
-            throw new InvalidOperationException($"Failed to download or load model {modelId}");
-        }
-
-        return result;
-    }
-
     #endregion
 
     public void Dispose()
@@ -440,12 +305,6 @@ public class ModelManager : IModelManager, IDisposable
         {
             if (disposing)
             {
-                foreach (var modelId in _activeDownloads.Keys)
-                {
-                    _downloadManager.CancelDownloadAsync(modelId).Wait();
-                }
-
-                _activeDownloads.Clear();
                 _collectionCache.Clear();
             }
 

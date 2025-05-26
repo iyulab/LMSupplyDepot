@@ -1,7 +1,3 @@
-using LMSupplyDepots.ModelHub.Utils;
-using LMSupplyDepots.Utils;
-using System.Text.Json;
-
 namespace LMSupplyDepots.ModelHub.HuggingFace;
 
 /// <summary>
@@ -16,66 +12,17 @@ public partial class HuggingFaceDownloader
     {
         _logger.LogInformation("Attempting to pause download for model {ModelId}", sourceId);
 
-        var downloadStatus = await GetDownloadStatusAsync(sourceId, cancellationToken);
-        if (downloadStatus != ModelDownloadStatus.Downloading)
+        // Check current status first
+        var currentStatus = await GetDownloadStatusAsync(sourceId, cancellationToken);
+        if (currentStatus != ModelDownloadStatus.Downloading)
         {
             _logger.LogWarning("Cannot pause download for model {ModelId} - not in downloading state", sourceId);
             return false;
         }
 
-        try
-        {
-            var normalizedId = HuggingFaceHelper.NormalizeSourceId(sourceId);
-            var modelType = await HuggingFaceHelper.DetermineModelTypeAsync(normalizedId, _client.Value, cancellationToken);
-            var targetDirectory = _fileSystemRepository.GetModelDirectoryPath(sourceId, modelType);
-
-            var pausedStatusFilePath = _fileSystemRepository.GetDownloadStatusFilePath(sourceId, modelType);
-
-            long totalSize = 0;
-
-            if (File.Exists(pausedStatusFilePath))
-            {
-                var content = await File.ReadAllTextAsync(pausedStatusFilePath, cancellationToken);
-                if (long.TryParse(content.Trim(), out totalSize))
-                {
-                    var statusInfo = new
-                    {
-                        ModelId = sourceId,
-                        Status = "Paused",
-                        PausedAt = DateTime.UtcNow,
-                        TargetDirectory = targetDirectory,
-                        TotalSize = totalSize,
-                        DownloadedSize = HuggingFaceHelper.CalculateDownloadedSize(targetDirectory)
-                    };
-
-                    var json = JsonHelper.Serialize(statusInfo);
-
-                    await File.WriteAllTextAsync(pausedStatusFilePath, json, cancellationToken);
-                    _logger.LogInformation("Download paused for model {ModelId}", sourceId);
-                    return true;
-                }
-            }
-
-            var newStatusInfo = new
-            {
-                ModelId = sourceId,
-                Status = "Paused",
-                PausedAt = DateTime.UtcNow,
-                TargetDirectory = targetDirectory,
-                DownloadedSize = HuggingFaceHelper.CalculateDownloadedSize(targetDirectory)
-            };
-
-            var newJson = JsonHelper.Serialize(newStatusInfo);
-
-            await File.WriteAllTextAsync(pausedStatusFilePath, newJson, cancellationToken);
-            _logger.LogInformation("Download paused for model {ModelId}", sourceId);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error pausing download for model {ModelId}", sourceId);
-            return false;
-        }
+        // Simply return true - actual pause is handled by cancellation in DownloadManager
+        _logger.LogInformation("Download marked for pause for model {ModelId}", sourceId);
+        return true;
     }
 
     /// <summary>
@@ -87,42 +34,11 @@ public partial class HuggingFaceDownloader
 
         try
         {
-            var normalizedId = HuggingFaceHelper.NormalizeSourceId(sourceId);
-            var modelType = await HuggingFaceHelper.DetermineModelTypeAsync(normalizedId, _client.Value, cancellationToken);
+            // Remove status file to cancel download
+            DownloadStatusHelper.RemoveStatusFile(sourceId, _hubOptions.DataPath);
 
-            var statusFilePath = _fileSystemRepository.GetDownloadStatusFilePath(sourceId, modelType);
-            if (File.Exists(statusFilePath))
-            {
-                File.Delete(statusFilePath);
-                _logger.LogInformation("Removed download status file for model {ModelId}", sourceId);
-            }
-
-            var targetDirectory = _fileSystemRepository.GetModelDirectoryPath(sourceId, modelType);
-            if (Directory.Exists(targetDirectory))
-            {
-                var files = Directory.GetFiles(targetDirectory);
-                if (files.Length == 0 ||
-                    files.All(f => Path.GetExtension(f) == ".download" ||
-                               Path.GetExtension(f) == ".part" ||
-                               Path.GetExtension(f) == ".tmp"))
-                {
-                    try
-                    {
-                        Directory.Delete(targetDirectory, true);
-                        _logger.LogInformation("Removed partial download directory for model {ModelId}", sourceId);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Could not delete directory for model {ModelId}", sourceId);
-                    }
-                }
-                else
-                {
-                    _logger.LogInformation(
-                        "Directory for model {ModelId} contains non-temporary files and will not be deleted",
-                        sourceId);
-                }
-            }
+            // Clean up any partial downloads
+            await CleanupPartialDownloadAsync(sourceId, cancellationToken);
 
             _logger.LogInformation("Download cancelled for model {ModelId}", sourceId);
             return true;
@@ -141,79 +57,17 @@ public partial class HuggingFaceDownloader
     {
         try
         {
-            var normalizedId = HuggingFaceHelper.NormalizeSourceId(sourceId);
-
-            string? artifactName = null;
-            if (sourceId.Contains('/'))
-            {
-                var parts = sourceId.Split('/');
-                if (parts.Length >= 3)
-                {
-                    artifactName = parts[parts.Length - 1];
-                }
-            }
-
+            // Check if there's an existing model
             var existingModel = await _fileSystemRepository.GetModelAsync(sourceId, cancellationToken);
             if (existingModel != null && existingModel.IsLocal)
             {
                 return ModelDownloadStatus.Completed;
             }
 
-            foreach (var modelType in Enum.GetValues<ModelType>())
+            // Check if download is paused (status file exists)
+            if (DownloadStatusHelper.IsPaused(sourceId, _hubOptions.DataPath))
             {
-                var modelDir = _fileSystemRepository.GetModelDirectoryPath(sourceId, modelType);
-
-                if (Directory.Exists(modelDir))
-                {
-                    var statusFiles = Directory.GetFiles(modelDir, $"*{FileSystemHelper.DownloadStatusFileExtension}");
-
-                    if (statusFiles.Length > 0)
-                    {
-                        string? statusFilePath = null;
-
-                        if (!string.IsNullOrEmpty(artifactName))
-                        {
-                            var sanitizedArtifactName = artifactName.Replace(':', '_').Replace('/', '_');
-                            var specificStatusFile = Path.Combine(modelDir, $"{sanitizedArtifactName}{FileSystemHelper.DownloadStatusFileExtension}");
-
-                            if (File.Exists(specificStatusFile))
-                            {
-                                statusFilePath = specificStatusFile;
-                            }
-                        }
-
-                        if (statusFilePath == null && statusFiles.Length > 0)
-                        {
-                            statusFilePath = statusFiles[0];
-                        }
-
-                        if (statusFilePath != null && File.Exists(statusFilePath))
-                        {
-                            return await ParseDownloadStatusFileAsync(statusFilePath, modelDir, cancellationToken);
-                        }
-                    }
-                }
-
-                var oldStatusFilePath = _fileSystemRepository.GetDownloadStatusFilePath(sourceId, modelType, artifactName);
-                if (File.Exists(oldStatusFilePath))
-                {
-                    return await ParseDownloadStatusFileAsync(oldStatusFilePath, modelDir, cancellationToken);
-                }
-            }
-
-            if (!string.IsNullOrEmpty(artifactName))
-            {
-                var downloadsDir = Path.Combine(_hubOptions.DataPath, FileSystemHelper.DownloadsDirectory);
-                if (Directory.Exists(downloadsDir))
-                {
-                    var sanitizedArtifactName = artifactName.Replace(':', '_').Replace('/', '_');
-                    var statusFile = Path.Combine(downloadsDir, $"{sanitizedArtifactName}{FileSystemHelper.DownloadStatusFileExtension}");
-
-                    if (File.Exists(statusFile))
-                    {
-                        return await ParseDownloadStatusFileAsync(statusFile, null, cancellationToken);
-                    }
-                }
+                return ModelDownloadStatus.Paused;
             }
 
             return null;
@@ -226,53 +80,85 @@ public partial class HuggingFaceDownloader
     }
 
     /// <summary>
-    /// Parses a download status file to determine the download status
+    /// Resumes a previously paused download
     /// </summary>
-    private async Task<ModelDownloadStatus> ParseDownloadStatusFileAsync(
-        string statusFilePath,
-        string? targetDir = null,
+    public async Task<LMModel> ResumeDownloadAsync(
+        string sourceId,
+        IProgress<ModelDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Attempting to resume download for model {ModelId}", sourceId);
+
+        var downloadStatus = await GetDownloadStatusAsync(sourceId, cancellationToken);
+        if (downloadStatus != ModelDownloadStatus.Paused)
+        {
+            _logger.LogWarning("Cannot resume download for model {ModelId} - not in paused state", sourceId);
+            throw new InvalidOperationException($"Download for model {sourceId} is not paused");
+        }
+
+        try
+        {
+            var normalizedId = HuggingFaceHelper.NormalizeSourceId(sourceId);
+            var modelType = await HuggingFaceHelper.DetermineModelTypeAsync(normalizedId, _client.Value, cancellationToken);
+            var targetDirectory = _fileSystemRepository.GetModelDirectoryPath(sourceId, modelType);
+
+            Directory.CreateDirectory(targetDirectory);
+
+            _logger.LogInformation("Resuming download for model {ModelId} to {TargetDir}", sourceId, targetDirectory);
+            return await DownloadModelAsync(sourceId, targetDirectory, progress, cancellationToken);
+        }
+        catch (Exception ex) when (!(ex is InvalidOperationException))
+        {
+            _logger.LogError(ex, "Error resuming download for model {ModelId}", sourceId);
+            throw new InvalidOperationException($"Failed to resume download for model {sourceId}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Cleans up partial download files
+    /// </summary>
+    private async Task CleanupPartialDownloadAsync(string sourceId, CancellationToken cancellationToken)
     {
         try
         {
-            var statusContent = await File.ReadAllTextAsync(statusFilePath, cancellationToken);
-
-            if (statusContent.Contains("\"Status\"") &&
-                statusContent.Contains("\"Paused\""))
+            if (!ModelIdentifier.TryParse(sourceId, out var identifier))
             {
-                return ModelDownloadStatus.Paused;
+                return;
             }
 
-            if (statusContent.Contains("\"Status\"") &&
-                statusContent.Contains("\"Failed\""))
-            {
-                return ModelDownloadStatus.Failed;
-            }
+            var normalizedId = HuggingFaceHelper.NormalizeSourceId(sourceId);
+            var modelType = await HuggingFaceHelper.DetermineModelTypeAsync(normalizedId, _client.Value, cancellationToken);
 
-            if (statusContent.StartsWith("{") && statusContent.EndsWith("}"))
+            var targetDirectory = _fileSystemRepository.GetModelDirectoryPath(sourceId, modelType);
+            if (Directory.Exists(targetDirectory))
             {
-                return ModelDownloadStatus.Downloading;
-            }
+                var files = Directory.GetFiles(targetDirectory);
 
-            if (long.TryParse(statusContent.Trim(), out _))
-            {
-                if (!string.IsNullOrEmpty(targetDir) && Directory.Exists(targetDir))
+                // Only delete if directory contains only temporary/partial files
+                if (files.Length == 0 || files.All(f =>
+                    Path.GetExtension(f).ToLowerInvariant() is ".download" or ".part" or ".tmp"))
                 {
-                    var recentFiles = Directory.GetFiles(targetDir, "*.*", SearchOption.AllDirectories)
-                        .Where(f => (DateTime.UtcNow - new FileInfo(f).LastWriteTimeUtc).TotalSeconds < 30)
-                        .Any();
-
-                    return recentFiles ? ModelDownloadStatus.Downloading : ModelDownloadStatus.Paused;
+                    try
+                    {
+                        Directory.Delete(targetDirectory, true);
+                        _logger.LogInformation("Removed partial download directory for model {ModelId}", sourceId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Could not delete directory for model {ModelId}", sourceId);
+                    }
                 }
-
-                return ModelDownloadStatus.Downloading;
+                else
+                {
+                    _logger.LogInformation(
+                        "Directory for model {ModelId} contains non-temporary files and will not be deleted",
+                        sourceId);
+                }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error parsing download status file: {FilePath}", statusFilePath);
+            _logger.LogWarning(ex, "Error during cleanup for model {ModelId}", sourceId);
         }
-
-        return ModelDownloadStatus.Paused;
     }
 }

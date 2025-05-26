@@ -39,13 +39,13 @@ public interface IHostService
 
     Task<bool> PauseDownloadAsync(string modelId, CancellationToken cancellationToken = default);
 
-    Task<ModelDownloadState> ResumeDownloadAsync(string modelId, IProgress<ModelDownloadProgress>? progress = null, CancellationToken cancellationToken = default);
+    Task<LMModel> ResumeDownloadAsync(string modelId, IProgress<ModelDownloadProgress>? progress = null, CancellationToken cancellationToken = default);
 
     Task<bool> CancelDownloadAsync(string modelId, CancellationToken cancellationToken = default);
 
     Task<ModelDownloadStatus?> GetDownloadStatusAsync(string modelId, CancellationToken cancellationToken = default);
 
-    IReadOnlyDictionary<string, ModelDownloadState> GetActiveDownloads();
+    Task<ModelDownloadProgress?> GetDownloadProgressAsync(string modelId, CancellationToken cancellationToken = default);
 
     #endregion
 

@@ -1,3 +1,4 @@
+global using System.Net;
 global using System.Text.RegularExpressions;
 global using System.Collections.Concurrent;
 global using Microsoft.Extensions.Options;
@@ -9,3 +10,4 @@ global using LMSupplyDepots.ModelHub.Models;
 global using LMSupplyDepots.ModelHub.Interfaces;
 global using LMSupplyDepots.ModelHub.Exceptions;
 global using LMSupplyDepots.ModelHub.Repositories;
+global using LMSupplyDepots.ModelHub.Utils;

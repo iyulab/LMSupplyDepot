@@ -1,4 +1,4 @@
-﻿using LMSupplyDepots.Host;
+using LMSupplyDepots.Host;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -12,7 +12,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Adds LMSupplyDepots Host services to the service collection
     /// </summary>
-    public static IServiceCollection AddLMSupplyDepots(this IServiceCollection services, Action<HostOptions>? configureOptions = null)
+    public static IServiceCollection AddLMSupplyDepots(this IServiceCollection services, Action<LMSupplyDepotOptions>? configureOptions = null)
     {
         // Register options
         if (configureOptions != null)
@@ -21,7 +21,7 @@ public static class ServiceCollectionExtensions
         }
         else
         {
-            services.TryAddSingleton(Microsoft.Extensions.Options.Options.Create(new HostOptions()));
+            services.TryAddSingleton(Microsoft.Extensions.Options.Options.Create(new LMSupplyDepotOptions()));
         }
 
         // Register host service

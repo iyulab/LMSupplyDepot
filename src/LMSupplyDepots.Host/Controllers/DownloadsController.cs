@@ -19,24 +19,6 @@ public class DownloadsController : ControllerBase
     }
 
     /// <summary>
-    /// Gets all active downloads
-    /// </summary>
-    [HttpGet]
-    public ActionResult<IEnumerable<KeyValuePair<string, ModelDownloadState>>> GetActiveDownloads()
-    {
-        try
-        {
-            var downloads = _hostService.GetActiveDownloads();
-            return Ok(downloads);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error retrieving active downloads");
-            return StatusCode(500, "An error occurred while retrieving active downloads");
-        }
-    }
-
-    /// <summary>
     /// Gets the status of a specific download
     /// </summary>
     [HttpGet("status")]
@@ -60,6 +42,34 @@ public class DownloadsController : ControllerBase
             return StatusCode(500, new ErrorResponse
             {
                 Error = $"An error occurred while retrieving download status for model {model}"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Gets the progress of a specific download
+    /// </summary>
+    [HttpGet("progress")]
+    public async Task<ActionResult<ModelDownloadProgress?>> GetDownloadProgress(
+        [FromQuery] string model,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(model))
+        {
+            return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
+        }
+
+        try
+        {
+            var progress = await _hostService.GetDownloadProgressAsync(model, cancellationToken);
+            return Ok(progress);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving download progress for model {Model}", model);
+            return StatusCode(500, new ErrorResponse
+            {
+                Error = $"An error occurred while retrieving download progress for model {model}"
             });
         }
     }
@@ -132,7 +142,7 @@ public class DownloadsController : ControllerBase
     /// Resumes a paused download
     /// </summary>
     [HttpPost("resume")]
-    public async Task<ActionResult<ModelDownloadState>> ResumeDownload(
+    public async Task<ActionResult<LMModel>> ResumeDownload(
         [FromBody] ModelActionRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -144,8 +154,8 @@ public class DownloadsController : ControllerBase
         try
         {
             var progressTracker = new ModelDownloadProgressTracker();
-            var state = await _hostService.ResumeDownloadAsync(request.Model, progressTracker, cancellationToken);
-            return Ok(state);
+            var model = await _hostService.ResumeDownloadAsync(request.Model, progressTracker, cancellationToken);
+            return Ok(model);
         }
         catch (Exception ex)
         {

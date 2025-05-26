@@ -152,7 +152,7 @@ public partial class LMSupplyDepot
     /// <summary>
     /// Resumes a paused model download
     /// </summary>
-    public async Task<ModelDownloadState> ResumeDownloadAsync(
+    public async Task<LMModel> ResumeDownloadAsync(
         string modelKey,
         IProgress<ModelDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
@@ -182,11 +182,12 @@ public partial class LMSupplyDepot
     }
 
     /// <summary>
-    /// Gets information about all active downloads
+    /// Gets download progress information
     /// </summary>
-    public IReadOnlyDictionary<string, ModelDownloadState> GetActiveDownloads()
+    public async Task<ModelDownloadProgress?> GetDownloadProgressAsync(string modelKey, CancellationToken cancellationToken = default)
     {
-        return ModelManager.GetActiveDownloads();
+        string modelId = await ModelManager.ResolveModelKeyAsync(modelKey, cancellationToken);
+        return ModelManager.GetDownloadProgress(modelId);
     }
 
     #endregion

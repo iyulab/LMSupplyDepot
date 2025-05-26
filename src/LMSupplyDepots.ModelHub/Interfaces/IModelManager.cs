@@ -83,7 +83,7 @@ public interface IModelManager
     /// <summary>
     /// Resumes a paused model download
     /// </summary>
-    Task<ModelDownloadState> ResumeDownloadAsync(
+    Task<LMModel> ResumeDownloadAsync(
         string modelId,
         IProgress<ModelDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default);
@@ -99,9 +99,9 @@ public interface IModelManager
     ModelDownloadStatus? GetDownloadStatus(string modelId);
 
     /// <summary>
-    /// Gets information about all active downloads
+    /// Gets download progress information
     /// </summary>
-    IReadOnlyDictionary<string, ModelDownloadState> GetActiveDownloads();
+    ModelDownloadProgress? GetDownloadProgress(string modelId);
 
     #endregion
 }

@@ -1,4 +1,4 @@
-﻿namespace LMSupplyDepots.SDK;
+namespace LMSupplyDepots.SDK;
 
 /// <summary>
 /// Options for configuring the LMSupplyDepot

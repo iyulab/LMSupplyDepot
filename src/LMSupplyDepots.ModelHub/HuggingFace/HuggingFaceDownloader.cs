@@ -82,15 +82,6 @@ public partial class HuggingFaceDownloader : IModelDownloader, IDisposable
     }
 
     /// <summary>
-    /// Gets available disk space for a path
-    /// </summary>
-    private static long GetAvailableDiskSpace(string path)
-    {
-        var driveInfo = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path)) ?? "C:\\");
-        return driveInfo.AvailableFreeSpace;
-    }
-
-    /// <summary>
     /// Clean up resources
     /// </summary>
     public void Dispose()

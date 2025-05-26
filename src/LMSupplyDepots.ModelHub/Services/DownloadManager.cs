@@ -9,6 +9,7 @@ public class DownloadManager : IDisposable
     private readonly ModelHubOptions _options;
     private readonly IEnumerable<IModelDownloader> _downloaders;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _activeDownloads = new();
+    private readonly ConcurrentDictionary<string, DownloadInfo> _downloadInfos = new();
     private readonly SemaphoreSlim _downloadSemaphore;
     private bool _disposed;
 
@@ -21,6 +22,72 @@ public class DownloadManager : IDisposable
         _options = options.Value;
         _downloaders = downloaders;
         _downloadSemaphore = new SemaphoreSlim(_options.MaxConcurrentDownloads);
+    }
+
+    /// <summary>
+    /// Gets information about all current downloads
+    /// </summary>
+    public async Task<IEnumerable<DownloadInfo>> GetAllDownloadsAsync(CancellationToken cancellationToken = default)
+    {
+        var allDownloads = new List<DownloadInfo>();
+
+        // Add active downloads
+        foreach (var kvp in _downloadInfos)
+        {
+            var downloadInfo = kvp.Value;
+
+            // Update current progress
+            var currentProgress = GetDownloadProgress(kvp.Key);
+            if (currentProgress != null)
+            {
+                downloadInfo.Progress = currentProgress;
+            }
+
+            allDownloads.Add(downloadInfo);
+        }
+
+        // Check for paused downloads from file system
+        await AddPausedDownloadsAsync(allDownloads, cancellationToken);
+
+        return allDownloads.OrderByDescending(d => d.StartedAt ?? DateTime.MinValue);
+    }
+
+    /// <summary>
+    /// Adds paused downloads from file system to the list
+    /// </summary>
+    private async Task AddPausedDownloadsAsync(List<DownloadInfo> allDownloads, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var downloadsDir = Path.Combine(_options.DataPath, ".downloads");
+            if (!Directory.Exists(downloadsDir))
+                return;
+
+            var statusFiles = Directory.GetFiles(downloadsDir, "*.download");
+
+            foreach (var statusFile in statusFiles)
+            {
+                var fileName = Path.GetFileNameWithoutExtension(statusFile);
+
+                // Skip if already in active downloads
+                if (_downloadInfos.ContainsKey(fileName))
+                    continue;
+
+                var downloadInfo = new DownloadInfo
+                {
+                    ModelId = fileName,
+                    Status = ModelDownloadStatus.Paused,
+                    Progress = GetDownloadProgress(fileName),
+                    StartedAt = File.GetCreationTime(statusFile)
+                };
+
+                allDownloads.Add(downloadInfo);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error retrieving paused downloads from file system");
+        }
     }
 
     /// <summary>
@@ -41,15 +108,58 @@ public class DownloadManager : IDisposable
         var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _activeDownloads[sourceId] = cts;
 
+        // Create download info
+        var downloadInfo = new DownloadInfo
+        {
+            ModelId = sourceId,
+            Status = ModelDownloadStatus.Downloading,
+            StartedAt = DateTime.UtcNow
+        };
+
+        _downloadInfos[sourceId] = downloadInfo;
+
         await _downloadSemaphore.WaitAsync(cancellationToken);
         try
         {
-            return await downloader.DownloadModelAsync(sourceId, targetDirectory, progress, cts.Token);
+            // Create progress wrapper to update our tracking
+            var progressWrapper = progress != null ? new Progress<ModelDownloadProgress>(p =>
+            {
+                downloadInfo.Progress = p;
+                progress.Report(p);
+            }) : new Progress<ModelDownloadProgress>(p => downloadInfo.Progress = p);
+
+            var result = await downloader.DownloadModelAsync(sourceId, targetDirectory, progressWrapper, cts.Token);
+
+            // Update status to completed
+            downloadInfo.Status = ModelDownloadStatus.Completed;
+            downloadInfo.ModelInfo = result;
+
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            downloadInfo.Status = ModelDownloadStatus.Cancelled;
+            throw;
+        }
+        catch (Exception)
+        {
+            downloadInfo.Status = ModelDownloadStatus.Failed;
+            throw;
         }
         finally
         {
             _downloadSemaphore.Release();
             _activeDownloads.TryRemove(sourceId, out _);
+
+            // Remove from tracking after a delay for completed/failed downloads
+            if (downloadInfo.Status == ModelDownloadStatus.Completed ||
+                downloadInfo.Status == ModelDownloadStatus.Failed ||
+                downloadInfo.Status == ModelDownloadStatus.Cancelled)
+            {
+                _ = Task.Delay(TimeSpan.FromMinutes(5)).ContinueWith(task =>
+                    _downloadInfos.TryRemove(sourceId, out _));
+            }
+
             cts.Dispose();
         }
     }
@@ -70,6 +180,12 @@ public class DownloadManager : IDisposable
         if (paused)
         {
             cts.Cancel();
+
+            // Update download info
+            if (_downloadInfos.TryGetValue(sourceId, out var downloadInfo))
+            {
+                downloadInfo.Status = ModelDownloadStatus.Paused;
+            }
         }
 
         return paused;
@@ -89,6 +205,12 @@ public class DownloadManager : IDisposable
             cts.Dispose();
         }
 
+        // Update download info
+        if (_downloadInfos.TryGetValue(sourceId, out var downloadInfo))
+        {
+            downloadInfo.Status = ModelDownloadStatus.Cancelled;
+        }
+
         return cancelled;
     }
 
@@ -97,6 +219,12 @@ public class DownloadManager : IDisposable
     /// </summary>
     public ModelDownloadStatus? GetDownloadStatus(string sourceId)
     {
+        // Check active downloads first
+        if (_downloadInfos.TryGetValue(sourceId, out var downloadInfo))
+        {
+            return downloadInfo.Status;
+        }
+
         if (_activeDownloads.ContainsKey(sourceId))
         {
             return ModelDownloadStatus.Downloading;
@@ -112,6 +240,12 @@ public class DownloadManager : IDisposable
     /// </summary>
     public ModelDownloadProgress? GetDownloadProgress(string sourceId)
     {
+        // Check if we have cached progress first
+        if (_downloadInfos.TryGetValue(sourceId, out var downloadInfo) && downloadInfo.Progress != null)
+        {
+            return downloadInfo.Progress;
+        }
+
         var totalSize = DownloadStatusHelper.GetTotalSize(sourceId, _options.DataPath);
         if (!totalSize.HasValue)
         {
@@ -161,6 +295,7 @@ public class DownloadManager : IDisposable
                 cts.Dispose();
             }
             _activeDownloads.Clear();
+            _downloadInfos.Clear();
             _downloadSemaphore.Dispose();
             _disposed = true;
         }

@@ -113,6 +113,11 @@ public class HostService : IHostService, IAsyncDisposable
         return _depot.GetDownloadProgressAsync(modelId, cancellationToken);
     }
 
+    public Task<IEnumerable<DownloadInfo>> GetAllDownloadsAsync(CancellationToken cancellationToken = default)
+    {
+        return _depot.GetAllDownloadsAsync(cancellationToken);
+    }
+
     #endregion
 
     #region Model Loading and Inference

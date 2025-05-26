@@ -103,5 +103,10 @@ public interface IModelManager
     /// </summary>
     ModelDownloadProgress? GetDownloadProgress(string modelId);
 
+    /// <summary>
+    /// Gets information about all current downloads
+    /// </summary>
+    Task<IEnumerable<DownloadInfo>> GetAllDownloadsAsync(CancellationToken cancellationToken = default);
+
     #endregion
 }

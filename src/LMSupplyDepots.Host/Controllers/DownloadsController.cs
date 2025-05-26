@@ -6,7 +6,7 @@ namespace LMSupplyDepots.Host.Controllers;
 /// Controller for model artifact download operations
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/downloads")]
 public class DownloadsController : ControllerBase
 {
     private readonly IHostService _hostService;
@@ -16,6 +16,27 @@ public class DownloadsController : ControllerBase
     {
         _hostService = hostService;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Gets all current downloads (active, paused, etc.)
+    /// </summary>
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<DownloadInfo>>> GetAllDownloads(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var downloads = await _hostService.GetAllDownloadsAsync(cancellationToken);
+            return Ok(downloads);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving all downloads");
+            return StatusCode(500, new ErrorResponse
+            {
+                Error = "An error occurred while retrieving downloads"
+            });
+        }
     }
 
     /// <summary>
@@ -202,6 +223,8 @@ public class DownloadsController : ControllerBase
         }
     }
 }
+
+
 
 /// <summary>
 /// Request model for starting a download

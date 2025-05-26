@@ -47,6 +47,8 @@ public interface IHostService
 
     Task<ModelDownloadProgress?> GetDownloadProgressAsync(string modelId, CancellationToken cancellationToken = default);
 
+    Task<IEnumerable<DownloadInfo>> GetAllDownloadsAsync(CancellationToken cancellationToken = default);
+
     #endregion
 
     #region Model Loading and Inference

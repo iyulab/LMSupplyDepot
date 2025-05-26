@@ -5,7 +5,7 @@ namespace LMSupplyDepots.ModelHub.Services;
 /// <summary>
 /// Implementation of IModelManager that coordinates model operations.
 /// </summary>
-public partial class ModelManager : IModelManager, IDisposable
+public class ModelManager : IModelManager, IDisposable
 {
     private readonly ModelHubOptions _options;
     private readonly ILogger<ModelManager> _logger;
@@ -237,6 +237,39 @@ public partial class ModelManager : IModelManager, IDisposable
     public ModelDownloadProgress? GetDownloadProgress(string modelId)
     {
         return _downloadManager.GetDownloadProgress(modelId);
+    }
+
+    public async Task<IEnumerable<DownloadInfo>> GetAllDownloadsAsync(CancellationToken cancellationToken = default)
+    {
+        var downloads = await _downloadManager.GetAllDownloadsAsync(cancellationToken);
+
+        // Enrich with model information where available
+        var enrichedDownloads = new List<DownloadInfo>();
+
+        foreach (var download in downloads)
+        {
+            try
+            {
+                if (download.ModelInfo == null)
+                {
+                    // Try to get model info from repository
+                    var model = await _repository.GetModelAsync(download.ModelId, cancellationToken);
+                    if (model != null)
+                    {
+                        download.ModelInfo = model;
+                    }
+                }
+
+                enrichedDownloads.Add(download);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to enrich download info for model {ModelId}", download.ModelId);
+                enrichedDownloads.Add(download); // Add without enrichment
+            }
+        }
+
+        return enrichedDownloads;
     }
 
     #endregion

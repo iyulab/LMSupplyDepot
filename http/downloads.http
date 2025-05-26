@@ -1,12 +1,14 @@
 @baseUrl = http://localhost:5181
 @apiBase = {{baseUrl}}/api/downloads
 
+@model = hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
+
 ### Get all active downloads
 GET {{apiBase}}
 Accept: application/json
 
 ### Get download status for a specific model (using query string)
-GET {{apiBase}}/status?model=hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
+GET {{apiBase}}/status?model={{model}}
 Accept: application/json
 
 ### Get download status by alias
@@ -18,7 +20,7 @@ POST {{apiBase}}/start
 Content-Type: application/json
 
 {
-  "model": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M"
+  "model": "{{model}}"
 }
 
 ### Start downloading embedding model
@@ -42,7 +44,7 @@ POST {{apiBase}}/pause
 Content-Type: application/json
 
 {
-  "model": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M"
+  "model": "{{model}}"
 }
 
 ### Resume download
@@ -50,7 +52,7 @@ POST {{apiBase}}/resume
 Content-Type: application/json
 
 {
-  "model": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M"
+  "model": "{{model}}"
 }
 
 ### Cancel download
@@ -58,5 +60,5 @@ POST {{apiBase}}/cancel
 Content-Type: application/json
 
 {
-  "model": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M"
+  "model": "{{model}}"
 }

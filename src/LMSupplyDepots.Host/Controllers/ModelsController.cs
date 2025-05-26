@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using LMSupplyDepots.Models;
 using LMSupplyDepots.ModelHub.Models;
 using Microsoft.Extensions.Logging;

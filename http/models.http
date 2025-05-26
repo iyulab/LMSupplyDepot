@@ -1,4 +1,3 @@
-### Variables
 @baseUrl = https://localhost:7212
 @apiBase = {{baseUrl}}/api
 
@@ -22,12 +21,15 @@ Content-Type: application/json
   "name": "llama-3-8b"
 }
 
-### Search for models
+### Search for models (UNIFIED - no more system/search conflict)
 GET {{apiBase}}/search?q=embedding&limit=5
 Accept: application/json
 
+### Search by type
+GET {{apiBase}}/search?type=TextGeneration&limit=5
+Accept: application/json
 
-### PUT alias
+### Set model alias
 PUT {{apiBase}}/alias
 Content-Type: application/json
 

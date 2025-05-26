@@ -1,7 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using LMSupplyDepots.Models;
 using System.Reflection;
-using LMSupplyDepots.ModelHub.Models;
 using Microsoft.Extensions.Logging;
 
 namespace LMSupplyDepots.Host.Controllers;
@@ -52,33 +51,6 @@ public class SystemController : ControllerBase
         {
             _logger.LogError(ex, "Error getting health information");
             return StatusCode(500, "An error occurred while getting health information");
-        }
-    }
-
-    /// <summary>
-    /// Searches for models from external sources
-    /// </summary>
-    [HttpGet("search")]
-    public async Task<ActionResult<IEnumerable<ModelSearchResult>>> SearchModels(
-        [FromQuery] string? type = null,
-        [FromQuery] string? search = null,
-        [FromQuery] int limit = 10)
-    {
-        try
-        {
-            ModelType? modelType = null;
-            if (!string.IsNullOrEmpty(type) && Enum.TryParse<ModelType>(type, true, out var parsedType))
-            {
-                modelType = parsedType;
-            }
-
-            var results = await _hostService.SearchModelsAsync(modelType, search, limit);
-            return Ok(results);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error searching for models");
-            return StatusCode(500, "An error occurred while searching for models");
         }
     }
 

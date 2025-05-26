@@ -1,4 +1,3 @@
-### Variables
 @baseUrl = https://localhost:7212
 @apiBase = {{baseUrl}}/api
 

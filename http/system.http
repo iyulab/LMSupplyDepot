@@ -1,4 +1,3 @@
-### Variables
 @baseUrl = https://localhost:7212
 @apiBase = {{baseUrl}}/api
 
@@ -8,12 +7,4 @@ Accept: application/json
 
 ### Get system configuration
 GET {{apiBase}}/config
-Accept: application/json
-
-### Search for models with specific type
-GET {{apiBase}}/search?type=TextGeneration&search=llama&limit=5
-Accept: application/json
-
-### Search for embedding models
-GET {{apiBase}}/search?type=Embedding&limit=3
 Accept: application/json

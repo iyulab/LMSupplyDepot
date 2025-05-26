@@ -1,4 +1,3 @@
-### Variables
 @baseUrl = https://localhost:7212
 @apiBase = {{baseUrl}}/api/models
 
@@ -13,18 +12,6 @@ Content-Type: application/json
     "threads": 4,
     "context_size": 4096,
     "batch_size": 512
-  }
-}
-
-### Explicitly load a model with alias
-POST {{apiBase}}/load
-Content-Type: application/json
-
-{
-  "model": "my-llama-alias",
-  "parameters": {
-    "gpu_layers": 0,  // CPU only mode
-    "threads": 8
   }
 }
 

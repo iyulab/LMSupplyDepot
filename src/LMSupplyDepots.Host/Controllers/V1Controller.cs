@@ -1,4 +1,4 @@
-﻿using LMSupplyDepots.Contracts;
+using LMSupplyDepots.Contracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -8,6 +8,9 @@ using LMSupplyDepots.Utils;
 
 namespace LMSupplyDepots.Host.Controllers;
 
+/// <summary>
+/// Controller for v1 API inference operations (OpenAI-compatible)
+/// </summary>
 [ApiController]
 [Route("/v1")]
 public class V1Controller : ControllerBase
@@ -16,7 +19,7 @@ public class V1Controller : ControllerBase
     private readonly ILogger<V1Controller> _logger;
 
     /// <summary>
-    /// Initializes a new instance of the InferenceController
+    /// Initializes a new instance of the V1Controller
     /// </summary>
     public V1Controller(IHostService hostService, ILogger<V1Controller> logger)
     {
@@ -131,6 +134,12 @@ public class V1Controller : ControllerBase
                 return BadRequest($"Model '{request.Model}' does not support text generation");
             }
 
+            // Handle streaming requests
+            if (request.Stream)
+            {
+                return await GenerateTextStream(request, cancellationToken);
+            }
+
             // Generate text
             var response = await _hostService.GenerateTextAsync(request.Model, request, cancellationToken);
             return Ok(response);
@@ -146,42 +155,48 @@ public class V1Controller : ControllerBase
     /// Generates text with streaming response
     /// </summary>
     [HttpPost("chat/completions/stream")]
-    public async Task GenerateTextStream(
+    public async Task<ActionResult> GenerateTextStreamEndpoint(
         [FromBody] GenerationRequest request,
-        [FromQuery] string modelId,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(modelId))
+        if (string.IsNullOrEmpty(request.Model))
         {
-            Response.StatusCode = 400;
-            await Response.WriteAsync("Model ID is required");
-            return;
+            return BadRequest("Model is required");
         }
 
         if (request == null || string.IsNullOrEmpty(request.Prompt))
         {
-            Response.StatusCode = 400;
-            await Response.WriteAsync("Request must include a prompt");
-            return;
+            return BadRequest("Request must include a prompt");
         }
 
+        // Force streaming mode
+        request.Stream = true;
+
+        return await GenerateTextStream(request, cancellationToken);
+    }
+
+    /// <summary>
+    /// Internal method to handle streaming text generation
+    /// </summary>
+    private async Task<ActionResult> GenerateTextStream(GenerationRequest request, CancellationToken cancellationToken)
+    {
         try
         {
             // Check if the model exists
-            var model = await _hostService.GetModelAsync(modelId, cancellationToken);
+            var model = await _hostService.GetModelAsync(request.Model, cancellationToken);
             if (model == null)
             {
                 Response.StatusCode = 404;
-                await Response.WriteAsync($"Model '{modelId}' not found");
-                return;
+                await Response.WriteAsync($"Model '{request.Model}' not found");
+                return new EmptyResult();
             }
 
             // Check if the model supports text generation
             if (model.Type != Models.ModelType.TextGeneration || !model.Capabilities.SupportsTextGeneration)
             {
                 Response.StatusCode = 400;
-                await Response.WriteAsync($"Model '{modelId}' does not support text generation");
-                return;
+                await Response.WriteAsync($"Model '{request.Model}' does not support text generation");
+                return new EmptyResult();
             }
 
             // Set the response type for streaming
@@ -189,23 +204,27 @@ public class V1Controller : ControllerBase
             Response.Headers.Add("Cache-Control", "no-cache");
             Response.Headers.Add("Connection", "keep-alive");
 
-            // Force the request to be a streaming request
-            request.Stream = true;
-
             // Stream the generated text
-            await foreach (var token in _hostService.GenerateTextStreamAsync(modelId, request, cancellationToken))
+            await foreach (var token in _hostService.GenerateTextStreamAsync(request.Model, request, cancellationToken))
             {
                 var data = new { text = token };
                 var json = JsonSerializer.Serialize(data);
                 await Response.WriteAsync($"data: {json}\n\n");
                 await Response.Body.FlushAsync(cancellationToken);
             }
+
+            // Send completion signal
+            await Response.WriteAsync("data: [DONE]\n\n");
+            await Response.Body.FlushAsync(cancellationToken);
+
+            return new EmptyResult();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error streaming text generation with model {ModelId}", modelId);
+            _logger.LogError(ex, "Error streaming text generation with model {Model}", request.Model);
             Response.StatusCode = 500;
             await Response.WriteAsync($"Error generating text: {ex.Message}");
+            return new EmptyResult();
         }
     }
 }

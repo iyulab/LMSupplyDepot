@@ -1,5 +1,3 @@
-﻿using System.Diagnostics;
-
 namespace LMSupplyDepots.ModelHub.Models;
 
 /// <summary>
@@ -33,14 +31,14 @@ public readonly struct ModelIdentifier : IEquatable<ModelIdentifier>
     public string Format { get; }
 
     /// <summary>
-    /// Model type (TextGeneration, Embedding, etc.)
+    /// For backwards compatibility - collection ID is publisher/modelName
     /// </summary>
-    public ModelType ModelType { get; }
+    public string CollectionId => $"{Publisher}/{ModelName}";
 
     /// <summary>
     /// For backwards compatibility
     /// </summary>
-    public string RepoId => $"{Publisher}/{ModelName}";
+    public string RepoId => CollectionId;
 
     /// <summary>
     /// Creates a new immutable model identifier
@@ -50,15 +48,13 @@ public readonly struct ModelIdentifier : IEquatable<ModelIdentifier>
         string publisher,
         string modelName,
         string artifactName,
-        string format = "gguf",
-        ModelType modelType = ModelType.TextGeneration)
+        string format = "gguf")
     {
         Registry = registry ?? throw new ArgumentNullException(nameof(registry));
         Publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         ModelName = modelName ?? throw new ArgumentNullException(nameof(modelName));
         ArtifactName = artifactName ?? throw new ArgumentNullException(nameof(artifactName));
         Format = format ?? "gguf";
-        ModelType = modelType;
     }
 
     /// <summary>
@@ -95,14 +91,13 @@ public readonly struct ModelIdentifier : IEquatable<ModelIdentifier>
         string modelName;
         string artifactName;
         string format = "gguf";
-        var modelType = ModelType.TextGeneration;
 
         if (pathParts.Length == 1)
         {
             // Just one part - treat it as both publisher and model name
             publisher = "local";
             modelName = pathParts[0];
-            artifactName = Path.GetFileNameWithoutExtension(modelName);
+            artifactName = modelName;
         }
         else if (pathParts.Length == 2)
         {
@@ -116,13 +111,9 @@ public readonly struct ModelIdentifier : IEquatable<ModelIdentifier>
             // publisher/model/artifact - a full format
             publisher = pathParts[0];
             modelName = pathParts[1];
-            artifactName = pathParts[2];
 
-            // Check if we have a type indicator in the artifact name
-            if (artifactName.Contains("embed", StringComparison.OrdinalIgnoreCase))
-            {
-                modelType = ModelType.Embedding;
-            }
+            // Join all remaining parts as artifact name (in case artifact name contains '/')
+            artifactName = string.Join("/", pathParts.Skip(2));
         }
         else
         {
@@ -141,8 +132,7 @@ public readonly struct ModelIdentifier : IEquatable<ModelIdentifier>
             }
         }
 
-        // Default to not multi-file - this will be determined elsewhere based on actual files
-        return new ModelIdentifier(registry, publisher, modelName, artifactName, format, modelType);
+        return new ModelIdentifier(registry, publisher, modelName, artifactName, format);
     }
 
     /// <summary>
@@ -165,9 +155,9 @@ public readonly struct ModelIdentifier : IEquatable<ModelIdentifier>
     /// <summary>
     /// Creates a local model identifier
     /// </summary>
-    public static ModelIdentifier CreateLocal(string name, ModelType modelType = ModelType.TextGeneration, string format = "gguf")
+    public static ModelIdentifier CreateLocal(string name, string format = "gguf")
     {
-        return new ModelIdentifier("local", "local", name, name, format, modelType);
+        return new ModelIdentifier("local", "local", name, name, format);
     }
 
     /// <summary>
@@ -177,10 +167,9 @@ public readonly struct ModelIdentifier : IEquatable<ModelIdentifier>
         string publisher,
         string modelName,
         string artifactName,
-        ModelType modelType = ModelType.TextGeneration,
         string format = "gguf")
     {
-        return new ModelIdentifier("hf", publisher, modelName, artifactName, format, modelType);
+        return new ModelIdentifier("hf", publisher, modelName, artifactName, format);
     }
 
     /// <summary>
@@ -212,9 +201,8 @@ public readonly struct ModelIdentifier : IEquatable<ModelIdentifier>
 
         string artifactName = !string.IsNullOrEmpty(model.ArtifactName) ? model.ArtifactName : model.Name;
         string format = !string.IsNullOrEmpty(model.Format) ? model.Format : "gguf";
-        var modelType = model.Type;
 
-        return new ModelIdentifier(registry, publisher, modelName, artifactName, format, modelType);
+        return new ModelIdentifier(registry, publisher, modelName, artifactName, format);
     }
 
     /// <summary>
@@ -224,10 +212,9 @@ public readonly struct ModelIdentifier : IEquatable<ModelIdentifier>
     {
         model.Id = ToString();
         model.Registry = Registry;
-        model.RepoId = $"{Publisher}/{ModelName}";
+        model.RepoId = CollectionId;
         model.ArtifactName = ArtifactName;
         model.Format = Format;
-        model.Type = ModelType;
     }
 
     /// <summary>
@@ -243,7 +230,7 @@ public readonly struct ModelIdentifier : IEquatable<ModelIdentifier>
     /// </summary>
     public ModelIdentifier WithArtifactName(string newArtifactName)
     {
-        return new ModelIdentifier(Registry, Publisher, ModelName, newArtifactName, Format, ModelType);
+        return new ModelIdentifier(Registry, Publisher, ModelName, newArtifactName, Format);
     }
 
     /// <summary>
@@ -251,15 +238,7 @@ public readonly struct ModelIdentifier : IEquatable<ModelIdentifier>
     /// </summary>
     public ModelIdentifier WithFormat(string newFormat)
     {
-        return new ModelIdentifier(Registry, Publisher, ModelName, ArtifactName, newFormat, ModelType);
-    }
-
-    /// <summary>
-    /// Creates a new ModelIdentifier with updated model type
-    /// </summary>
-    public ModelIdentifier WithModelType(ModelType modelType)
-    {
-        return new ModelIdentifier(Registry, Publisher, ModelName, ArtifactName, Format, modelType);
+        return new ModelIdentifier(Registry, Publisher, ModelName, ArtifactName, newFormat);
     }
 
     /// <summary>
@@ -279,8 +258,7 @@ public readonly struct ModelIdentifier : IEquatable<ModelIdentifier>
                Publisher == other.Publisher &&
                ModelName == other.ModelName &&
                ArtifactName == other.ArtifactName &&
-               Format == other.Format &&
-               ModelType == other.ModelType;
+               Format == other.Format;
     }
 
     /// <summary>
@@ -288,7 +266,7 @@ public readonly struct ModelIdentifier : IEquatable<ModelIdentifier>
     /// </summary>
     public override int GetHashCode()
     {
-        return HashCode.Combine(Registry, Publisher, ModelName, ArtifactName, Format, ModelType);
+        return HashCode.Combine(Registry, Publisher, ModelName, ArtifactName, Format);
     }
 
     /// <summary>

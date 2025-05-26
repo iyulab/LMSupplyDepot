@@ -97,9 +97,16 @@ public partial class HuggingFaceDownloader : IModelDownloader, IDisposable
     {
         if (!_disposed)
         {
-            if (disposing && _client.IsValueCreated)
+            if (disposing)
             {
-                _client.Value.Dispose();
+                // Clean up cancellation tokens first
+                CleanupCancellationTokens();
+
+                // Then dispose the client
+                if (_client.IsValueCreated)
+                {
+                    _client.Value.Dispose();
+                }
             }
 
             _disposed = true;

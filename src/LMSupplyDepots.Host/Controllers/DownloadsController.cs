@@ -96,10 +96,10 @@ public class DownloadsController : ControllerBase
     }
 
     /// <summary>
-    /// Starts downloading a specific model artifact
+    /// Starts downloading a specific model artifact and returns immediately
     /// </summary>
     [HttpPost("start")]
-    public async Task<ActionResult<LMModel>> StartDownload(
+    public async Task<ActionResult> StartDownload(
         [FromBody] ModelDownloadRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -110,16 +110,54 @@ public class DownloadsController : ControllerBase
 
         try
         {
-            var progressTracker = new ModelDownloadProgressTracker();
-            var model = await _hostService.DownloadModelAsync(request.Model, progressTracker, cancellationToken);
-            return Ok(model);
+            // Check if already downloading
+            var currentStatus = await _hostService.GetDownloadStatusAsync(request.Model, cancellationToken);
+            if (currentStatus == ModelDownloadStatus.Downloading)
+            {
+                return Conflict(new ErrorResponse
+                {
+                    Error = $"Model {request.Model} is already being downloaded"
+                });
+            }
+
+            if (currentStatus == ModelDownloadStatus.Completed)
+            {
+                return Ok(new
+                {
+                    Message = $"Model {request.Model} is already downloaded",
+                    Model = request.Model,
+                    Status = "Completed"
+                });
+            }
+
+            // Start download in background
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var progressTracker = new ModelDownloadProgressTracker();
+                    await _hostService.DownloadModelAsync(request.Model, progressTracker, CancellationToken.None);
+                    _logger.LogInformation("Background download completed for model {Model}", request.Model);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Background download failed for model {Model}", request.Model);
+                }
+            });
+
+            return Ok(new
+            {
+                Message = $"Download started for model {request.Model}",
+                Model = request.Model,
+                Status = "Started"
+            });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error downloading model {Model}", request.Model);
+            _logger.LogError(ex, "Error starting download for model {Model}", request.Model);
             return StatusCode(500, new ErrorResponse
             {
-                Error = $"An error occurred while downloading model {request.Model}: {ex.Message}"
+                Error = $"An error occurred while starting download for model {request.Model}: {ex.Message}"
             });
         }
     }
@@ -139,6 +177,45 @@ public class DownloadsController : ControllerBase
 
         try
         {
+            // Check current status first
+            var currentStatus = await _hostService.GetDownloadStatusAsync(request.Model, cancellationToken);
+
+            if (currentStatus == null)
+            {
+                return NotFound(new ErrorResponse
+                {
+                    Error = $"No download found for model {request.Model}"
+                });
+            }
+
+            if (currentStatus == ModelDownloadStatus.Completed)
+            {
+                return Ok(new
+                {
+                    Message = $"Model {request.Model} is already completed",
+                    Model = request.Model,
+                    Status = "Completed"
+                });
+            }
+
+            if (currentStatus == ModelDownloadStatus.Paused)
+            {
+                return Ok(new
+                {
+                    Message = $"Model {request.Model} is already paused",
+                    Model = request.Model,
+                    Status = "Paused"
+                });
+            }
+
+            if (currentStatus != ModelDownloadStatus.Downloading)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    Error = $"Cannot pause model {request.Model} - current status: {currentStatus}"
+                });
+            }
+
             bool result = await _hostService.PauseDownloadAsync(request.Model, cancellationToken);
             if (!result)
             {
@@ -147,7 +224,13 @@ public class DownloadsController : ControllerBase
                     Error = $"Failed to pause download for model {request.Model}"
                 });
             }
-            return Ok(new { Message = $"Download paused for model {request.Model}" });
+
+            return Ok(new
+            {
+                Message = $"Download paused for model {request.Model}",
+                Model = request.Model,
+                Status = "Paused"
+            });
         }
         catch (Exception ex)
         {
@@ -160,10 +243,10 @@ public class DownloadsController : ControllerBase
     }
 
     /// <summary>
-    /// Resumes a paused download
+    /// Resumes a paused download and returns immediately
     /// </summary>
     [HttpPost("resume")]
-    public async Task<ActionResult<LMModel>> ResumeDownload(
+    public async Task<ActionResult> ResumeDownload(
         [FromBody] ModelActionRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -174,9 +257,66 @@ public class DownloadsController : ControllerBase
 
         try
         {
-            var progressTracker = new ModelDownloadProgressTracker();
-            var model = await _hostService.ResumeDownloadAsync(request.Model, progressTracker, cancellationToken);
-            return Ok(model);
+            // Check if download is paused
+            var currentStatus = await _hostService.GetDownloadStatusAsync(request.Model, cancellationToken);
+
+            if (currentStatus == null)
+            {
+                return NotFound(new ErrorResponse
+                {
+                    Error = $"No download found for model {request.Model}"
+                });
+            }
+
+            if (currentStatus == ModelDownloadStatus.Completed)
+            {
+                return Ok(new
+                {
+                    Message = $"Model {request.Model} is already completed",
+                    Model = request.Model,
+                    Status = "Completed"
+                });
+            }
+
+            if (currentStatus == ModelDownloadStatus.Downloading)
+            {
+                return Ok(new
+                {
+                    Message = $"Model {request.Model} is already downloading",
+                    Model = request.Model,
+                    Status = "Downloading"
+                });
+            }
+
+            if (currentStatus != ModelDownloadStatus.Paused)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    Error = $"Cannot resume model {request.Model} - current status: {currentStatus}"
+                });
+            }
+
+            // Resume download in background
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var progressTracker = new ModelDownloadProgressTracker();
+                    await _hostService.ResumeDownloadAsync(request.Model, progressTracker, CancellationToken.None);
+                    _logger.LogInformation("Background resume completed for model {Model}", request.Model);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Background resume failed for model {Model}", request.Model);
+                }
+            });
+
+            return Ok(new
+            {
+                Message = $"Download resumed for model {request.Model}",
+                Model = request.Model,
+                Status = "Resumed"
+            });
         }
         catch (Exception ex)
         {
@@ -203,6 +343,27 @@ public class DownloadsController : ControllerBase
 
         try
         {
+            // Check current status first
+            var currentStatus = await _hostService.GetDownloadStatusAsync(request.Model, cancellationToken);
+
+            if (currentStatus == null)
+            {
+                return NotFound(new ErrorResponse
+                {
+                    Error = $"No download found for model {request.Model}"
+                });
+            }
+
+            if (currentStatus == ModelDownloadStatus.Completed)
+            {
+                return Ok(new
+                {
+                    Message = $"Model {request.Model} is already completed",
+                    Model = request.Model,
+                    Status = "Completed"
+                });
+            }
+
             bool result = await _hostService.CancelDownloadAsync(request.Model, cancellationToken);
             if (!result)
             {
@@ -211,7 +372,13 @@ public class DownloadsController : ControllerBase
                     Error = $"Failed to cancel download for model {request.Model}"
                 });
             }
-            return Ok(new { Message = $"Download cancelled for model {request.Model}" });
+
+            return Ok(new
+            {
+                Message = $"Download cancelled for model {request.Model}",
+                Model = request.Model,
+                Status = "Cancelled"
+            });
         }
         catch (Exception ex)
         {
@@ -223,8 +390,6 @@ public class DownloadsController : ControllerBase
         }
     }
 }
-
-
 
 /// <summary>
 /// Request model for starting a download

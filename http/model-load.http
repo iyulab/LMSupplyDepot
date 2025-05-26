@@ -2,12 +2,15 @@
 @baseUrl = http://localhost:5181
 @apiBase = {{baseUrl}}/api/models
 
+@model = hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
+@alias = llama-3-8b
+
 ### Load a model with alias
 POST {{apiBase}}/load
 Content-Type: application/json
 
 {
-  "model": "llama-3-8b",
+  "model": "{{alias}}",
   "parameters": {
     "gpu_layers": 26,
     "threads": 4,
@@ -21,7 +24,7 @@ POST {{apiBase}}/load
 Content-Type: application/json
 
 {
-  "model": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M",
+  "model": "{{model}}",
   "parameters": {
     "gpu_layers": 20,
     "threads": 8,
@@ -58,7 +61,7 @@ POST {{apiBase}}/load
 Content-Type: application/json
 
 {
-  "model": "llama-3-8b",
+  "model": "{{alias}}",
   "parameters": {
     "gpu_layers": 0,
     "threads": 8,
@@ -72,7 +75,7 @@ POST {{apiBase}}/unload
 Content-Type: application/json
 
 {
-  "model": "llama-3-8b"
+  "model": "{{alias}}"
 }
 
 ### Unload model by full ID
@@ -80,7 +83,7 @@ POST {{apiBase}}/unload
 Content-Type: application/json
 
 {
-  "model": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M"
+  "model": "{{model}}"
 }
 
 ### Unload embedding model

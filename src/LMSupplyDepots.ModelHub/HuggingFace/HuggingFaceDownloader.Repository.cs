@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace LMSupplyDepots.ModelHub.HuggingFace;
 
 /// <summary>
-/// Implementation of collection information operations
+/// Implementation of collection information operations with accurate size handling
 /// </summary>
 public partial class HuggingFaceDownloader
 {
@@ -28,35 +28,45 @@ public partial class HuggingFaceDownloader
 
         if (!string.IsNullOrEmpty(artifactName))
         {
-            string normalizedArtifactName = Path.GetFileNameWithoutExtension(artifactName);
+            _logger.LogInformation("Looking for artifact '{ArtifactName}' in collection '{CollectionId}'",
+                artifactName, collectionId);
 
-            _logger.LogInformation("Looking for artifact '{ArtifactName}' (normalized to '{NormalizedName}') in collection '{CollectionId}'",
-                artifactName, normalizedArtifactName, collectionId);
-
-            var model = collection.GetModel(normalizedArtifactName);
+            var model = collection.GetModel(artifactName);
             if (model != null)
             {
-                _logger.LogInformation("Found exact match for artifact '{ArtifactName}'", normalizedArtifactName);
+                _logger.LogInformation("Found exact match for artifact '{ArtifactName}'", artifactName);
                 return model;
             }
 
             var artifactList = collection.AvailableArtifacts;
             var matchingArtifact = artifactList.FirstOrDefault(a =>
-                a.Name.Equals(normalizedArtifactName, StringComparison.OrdinalIgnoreCase));
+                a.Name.Equals(artifactName, StringComparison.OrdinalIgnoreCase));
 
             if (matchingArtifact != null)
             {
                 _logger.LogInformation("Found case-insensitive match for artifact '{ArtifactName}': '{MatchingName}'",
-                    normalizedArtifactName, matchingArtifact.Name);
+                    artifactName, matchingArtifact.Name);
                 model = Utils.ModelFactory.FromCollectionAndArtifact(collection, matchingArtifact);
                 return model;
             }
 
-            var mostSimilarArtifact = FindMostSimilarArtifact(artifactList, normalizedArtifactName);
+            var partialMatch = artifactList.FirstOrDefault(a =>
+                a.Name.Contains(artifactName, StringComparison.OrdinalIgnoreCase) ||
+                artifactName.Contains(a.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (partialMatch != null)
+            {
+                _logger.LogInformation("Found partial match for artifact '{ArtifactName}': '{MatchingName}'",
+                    artifactName, partialMatch.Name);
+                model = Utils.ModelFactory.FromCollectionAndArtifact(collection, partialMatch);
+                return model;
+            }
+
+            var mostSimilarArtifact = FindMostSimilarArtifact(artifactList, artifactName);
             if (mostSimilarArtifact != null)
             {
                 _logger.LogInformation("Found similar artifact '{SimilarName}' for requested '{ArtifactName}'",
-                    mostSimilarArtifact.Name, normalizedArtifactName);
+                    mostSimilarArtifact.Name, artifactName);
                 model = Utils.ModelFactory.FromCollectionAndArtifact(collection, mostSimilarArtifact);
                 return model;
             }
@@ -64,14 +74,14 @@ public partial class HuggingFaceDownloader
             if (collection.AvailableArtifacts.Count == 0)
             {
                 _logger.LogWarning("No artifacts found in collection '{CollectionId}', creating placeholder for '{ArtifactName}'",
-                    collectionId, normalizedArtifactName);
+                    collectionId, artifactName);
 
                 var placeholder = new ModelArtifact
                 {
-                    Name = normalizedArtifactName,
+                    Name = artifactName,
                     Format = collection.DefaultFormat,
-                    Description = $"Placeholder for {normalizedArtifactName}",
-                    SizeInBytes = 1024 * 1024 * 1024,
+                    Description = $"Placeholder for {artifactName}",
+                    SizeInBytes = 0, // Size unknown until download
                     FilePaths = new List<string>()
                 };
 
@@ -153,7 +163,7 @@ public partial class HuggingFaceDownloader
     }
 
     /// <summary>
-    /// Gets information about a model collection
+    /// Gets information about a model collection with actual file sizes
     /// </summary>
     public async Task<LMCollection> GetCollectionInfoAsync(string collectionId, CancellationToken cancellationToken = default)
     {
@@ -184,6 +194,19 @@ public partial class HuggingFaceDownloader
                     EmbeddingDimension = HuggingFaceHelper.GetEmbeddingDimension(hfModel)
                 }
             };
+
+            // Get actual file sizes from repository
+            Dictionary<string, long>? repositoryFileSizes = null;
+            try
+            {
+                repositoryFileSizes = await _client.Value.GetRepositoryFileSizesAsync(collectionId, cancellationToken);
+                _logger.LogInformation("Retrieved actual file sizes for {Count} files in {CollectionId}",
+                    repositoryFileSizes.Count, collectionId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get repository file sizes for {CollectionId}, will use sibling info", collectionId);
+            }
 
             List<string> files = new List<string>();
             try
@@ -225,7 +248,9 @@ public partial class HuggingFaceDownloader
 
             files = files.Where(f => !string.IsNullOrWhiteSpace(f)).ToList();
 
-            collection.AvailableArtifacts = HuggingFaceHelper.ExtractArtifacts(files, collection.DefaultFormat);
+            // Extract artifacts with actual file sizes
+            collection.AvailableArtifacts = await HuggingFaceHelper.ExtractArtifactsAsync(
+                files, collection.DefaultFormat, repositoryFileSizes);
 
             _logger.LogInformation("Extracted {Count} artifacts from {Files} files for {CollectionId}",
                 collection.AvailableArtifacts.Count, files.Count, collectionId);
@@ -247,7 +272,7 @@ public partial class HuggingFaceDownloader
                     Name = Path.GetFileName(collectionId),
                     Format = collection.DefaultFormat,
                     Description = $"Default {collection.DefaultFormat} model",
-                    SizeInBytes = 1024 * 1024 * 1024,
+                    SizeInBytes = 0, // Size unknown
                     FilePaths = new List<string>()
                 });
             }
@@ -262,7 +287,7 @@ public partial class HuggingFaceDownloader
     }
 
     /// <summary>
-    /// Discovers model collections in Hugging Face
+    /// Discovers model collections in Hugging Face with accurate size information
     /// </summary>
     public async Task<IReadOnlyList<LMCollection>> DiscoverCollectionsAsync(
         ModelType? type = null,
@@ -333,7 +358,7 @@ public partial class HuggingFaceDownloader
                         }
                     };
 
-                    PopulateCollectionArtifacts(collection, hfModel);
+                    PopulateCollectionArtifactsWithActualSizes(collection, hfModel);
 
                     collections.Add(collection);
                 }
@@ -353,9 +378,9 @@ public partial class HuggingFaceDownloader
     }
 
     /// <summary>
-    /// Populates collection artifacts based on the model's siblings
+    /// Populates collection artifacts with actual file sizes from siblings
     /// </summary>
-    private static void PopulateCollectionArtifacts(LMCollection collection, HuggingFaceModel hfModel)
+    private static void PopulateCollectionArtifactsWithActualSizes(LMCollection collection, HuggingFaceModel hfModel)
     {
         if (hfModel.Siblings != null && hfModel.Siblings.Any())
         {
@@ -395,7 +420,7 @@ public partial class HuggingFaceDownloader
                         Name = artifactName,
                         Format = artifactFormat,
                         Description = GetArtifactDescription(artifactName, artifactFormat),
-                        SizeInBytes = HuggingFaceHelper.EstimateArtifactSize(artifactName, artifactFormat),
+                        SizeInBytes = 0, // Sibling doesn't have Size property - use 0 (unknown)
                         FilePaths = new List<string> { file.Filename },
                         QuantizationBits = quantBits,
                         SizeCategory = sizeCategory
@@ -428,7 +453,7 @@ public partial class HuggingFaceDownloader
             Name = artifactName,
             Format = defaultFormat,
             Description = $"Default {defaultFormat} model in this collection",
-            SizeInBytes = 1024 * 1024 * 1024,
+            SizeInBytes = 0, // Size unknown
             FilePaths = new List<string>()
         };
 

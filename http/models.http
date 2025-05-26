@@ -1,6 +1,9 @@
 @baseUrl = http://localhost:5181
 @apiBase = {{baseUrl}}/api
 
+@model = hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
+@alias = llama-3-8b
+
 ### List available models
 GET {{apiBase}}/models
 Accept: application/json
@@ -18,7 +21,7 @@ POST {{apiBase}}/show
 Content-Type: application/json
 
 {
-  "name": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M"
+  "name": "{{model}}"
 }
 
 ### Show model by alias
@@ -26,19 +29,19 @@ POST {{apiBase}}/show
 Content-Type: application/json
 
 {
-  "name": "llama-3-8b"
+  "name": "{{alias}}"
 }
 
 ### Get model by alias (using query string)
-GET {{apiBase}}/models/alias?alias=llama-3-8b
+GET {{apiBase}}/models/alias?alias={{alias}}
 Accept: application/json
 
 ### Check if model is downloaded (using query string)
-GET {{apiBase}}/models/downloaded?model=hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
+GET {{apiBase}}/models/downloaded?model={{model}}
 Accept: application/json
 
 ### Check if model is downloaded by alias
-GET {{apiBase}}/models/downloaded?model=llama-3-8b
+GET {{apiBase}}/models/downloaded?model={{alias}}
 Accept: application/json
 
 ### Set model alias
@@ -46,8 +49,8 @@ PUT {{apiBase}}/alias
 Content-Type: application/json
 
 {
-  "name": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M",
-  "alias": "llama-3-8b"
+  "name": "{{model}}",
+  "alias": "{{alias}}"
 }
 
 ### Delete a model
@@ -55,5 +58,5 @@ DELETE {{apiBase}}/delete
 Content-Type: application/json
 
 {
-  "name": "llama-3-8b"
+  "name": "{{alias}}"
 }

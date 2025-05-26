@@ -1,15 +1,10 @@
-﻿namespace LMSupplyDepots.ModelHub.Utils;
+namespace LMSupplyDepots.ModelHub.Utils;
 
 /// <summary>
 /// Provides utilities for managing model directory and file structures
 /// </summary>
 public static class FileSystemHelper
 {
-    /// <summary>
-    /// Downloads directory name within the models directory
-    /// </summary>
-    public const string DownloadsDirectory = ".downloads";
-
     /// <summary>
     /// Default file extension for model files (GGUF format)
     /// </summary>
@@ -35,114 +30,38 @@ public static class FileSystemHelper
     ];
 
     /// <summary>
-    /// Gets the path to the status file for a downloading model file
+    /// Gets the model directory path based on collection ID
     /// </summary>
-    public static string GetDownloadStatusFilePath(string modelId, string artifactName, ModelType modelType, string basePath)
+    public static string GetModelDirectoryPath(string collectionId, string basePath)
     {
-        // If we have a specific artifact name
-        if (!string.IsNullOrEmpty(artifactName))
+        if (string.IsNullOrWhiteSpace(collectionId))
         {
-            // Create the status file alongside where the model will be downloaded
-            var sanitizedArtifactName = SanitizeFileNamePart(artifactName);
-
-            // Get the target directory for this model/artifact
-            var modelDir = GetModelDirectoryPath(modelId, modelType, basePath);
-            Directory.CreateDirectory(modelDir);
-
-            // Use format: {modelDir}/{artifactName}.download
-            return Path.Combine(modelDir, $"{sanitizedArtifactName}{DownloadStatusFileExtension}");
+            throw new ArgumentException("Collection ID cannot be empty", nameof(collectionId));
         }
 
-        // For full model downloads without a specific artifact
-        if (ModelIdentifier.TryParse(modelId, out var identifier))
-        {
-            var structure = GetModelFileStructure(identifier, basePath);
-            Directory.CreateDirectory(structure.ModelNamePath);
-
-            // Place in the model directory
-            var fileName = $"{identifier.ModelName}{DownloadStatusFileExtension}";
-            return Path.Combine(structure.ModelNamePath, fileName);
-        }
-
-        // Legacy fallback - place in .downloads directory
-        var safeFileName = SanitizeFileNamePart(modelId);
-        var legacyDownloadDir = Path.Combine(basePath, DownloadsDirectory);
-        Directory.CreateDirectory(legacyDownloadDir);
-        return Path.Combine(legacyDownloadDir, $"{safeFileName}{DownloadStatusFileExtension}");
+        return Path.Combine(basePath, "models", collectionId.ToFileNameSafe());
     }
 
     /// <summary>
-    /// Gets the model directory path
+    /// Gets the model directory path for a model identifier
+    /// </summary>
+    public static string GetModelDirectoryPath(ModelIdentifier modelId, string basePath)
+    {
+        return GetModelDirectoryPath(modelId.CollectionId, basePath);
+    }
+
+    /// <summary>
+    /// Gets the model directory path for a model (legacy support)
     /// </summary>
     public static string GetModelDirectoryPath(string modelId, ModelType modelType, string basePath)
     {
         if (ModelIdentifier.TryParse(modelId, out var identifier))
         {
-            // Apply the model type from parameter
-            identifier = identifier.WithModelType(modelType);
             return GetModelDirectoryPath(identifier, basePath);
         }
 
-        // Legacy fallback for backward compatibility
-        var typeDashCase = modelType.ToString().ToLowerInvariant().Replace("_", "-");
-
-        // If model ID has repo/artifact format, handle accordingly
-        if (modelId.Contains('/'))
-        {
-            var parts = modelId.Split('/');
-
-            if (parts.Length >= 3 && modelId.Contains(':'))
-            {
-                // hf:owner/repo/artifact format
-                var registry = parts[0].Replace(":", "");
-                var publisher = parts[1];
-                var repo = parts[2];
-
-                return Path.Combine(basePath, "models", typeDashCase, publisher, repo);
-            }
-            else if (parts.Length >= 2)
-            {
-                // owner/repo format
-                var publisher = parts[0];
-                var repo = parts[1];
-
-                return Path.Combine(basePath, "models", typeDashCase, publisher, repo);
-            }
-        }
-
-        // If no clear structure, use a simple path
-        return Path.Combine(basePath, "models", typeDashCase, "local", modelId);
-    }
-
-    /// <summary>
-    /// Gets the path to the status file for a downloading model
-    /// </summary>
-    public static string GetDownloadStatusFilePath(ModelIdentifier modelId, string basePath)
-    {
-        var structure = GetModelFileStructure(modelId, basePath);
-        var fileName = $"{modelId.ArtifactName}{DownloadStatusFileExtension}";
-        return Path.Combine(structure.ModelNamePath, fileName);
-    }
-
-    /// <summary>
-    /// Sanitizes a file name part by replacing invalid characters
-    /// </summary>
-    private static string SanitizeFileNamePart(string input)
-    {
-        if (string.IsNullOrEmpty(input))
-            return "unknown";
-
-        // Replace characters that are invalid in file names
-        var invalidChars = Path.GetInvalidFileNameChars();
-        var result = new string(input.Select(c => invalidChars.Contains(c) ? '_' : c).ToArray());
-
-        // Ensure we don't have too many consecutive underscores
-        while (result.Contains("__"))
-        {
-            result = result.Replace("__", "_");
-        }
-
-        return result;
+        // Legacy fallback
+        return GetModelDirectoryPath(modelId, basePath);
     }
 
     /// <summary>
@@ -150,22 +69,16 @@ public static class FileSystemHelper
     /// </summary>
     public static ModelFileStructure GetModelFileStructure(ModelIdentifier modelId, string basePath)
     {
-        // Get model type in dash-case (e.g., "text-generation")
-        var modelTypeDashCase = modelId.ModelType.ToString().ToLowerInvariant().Replace("_", "-");
-
-        // Set up paths
         var modelsPath = Path.Combine(basePath, "models");
-        var modelTypePath = Path.Combine(modelsPath, modelTypeDashCase);
-        var publisherPath = Path.Combine(modelTypePath, modelId.Publisher);
-        var modelNamePath = Path.Combine(publisherPath, modelId.ModelName);
+        var collectionPath = Path.Combine(modelsPath, modelId.CollectionId.ToFileNameSafe());
 
         return new ModelFileStructure
         {
             BasePath = basePath,
             ModelsPath = modelsPath,
-            ModelTypePath = modelTypePath,
-            PublisherPath = publisherPath,
-            ModelNamePath = modelNamePath,
+            ModelTypePath = "", // No longer used
+            PublisherPath = "", // No longer used  
+            ModelNamePath = collectionPath,
 
             ModelId = modelId.ToString(),
             Registry = modelId.Registry,
@@ -173,17 +86,18 @@ public static class FileSystemHelper
             ModelName = modelId.ModelName,
             ArtifactName = modelId.ArtifactName,
             Format = modelId.Format,
-            ModelType = modelId.ModelType
+            ModelType = ModelType.TextGeneration // Will be determined from metadata
         };
     }
 
     /// <summary>
-    /// Gets the base model directory path
+    /// Gets the download status file path for a model artifact
     /// </summary>
-    public static string GetModelDirectoryPath(ModelIdentifier modelId, string basePath)
+    public static string GetDownloadStatusFilePath(ModelIdentifier modelId, string basePath)
     {
         var structure = GetModelFileStructure(modelId, basePath);
-        return structure.ModelNamePath;
+        var fileName = $"{modelId.ArtifactName}{DownloadStatusFileExtension}";
+        return Path.Combine(structure.ModelNamePath, fileName);
     }
 
     /// <summary>
@@ -197,49 +111,43 @@ public static class FileSystemHelper
     }
 
     /// <summary>
+    /// Gets the path to the metadata file for a collection and artifact
+    /// </summary>
+    public static string GetMetadataFilePath(string collectionId, string artifactName, string basePath)
+    {
+        var collectionPath = GetModelDirectoryPath(collectionId, basePath);
+        return Path.Combine(collectionPath, $"{artifactName}{MetadataFileExtension}");
+    }
+
+    /// <summary>
     /// Creates all necessary directories for a model
     /// </summary>
     public static void EnsureModelDirectoriesExist(ModelIdentifier modelId, string basePath)
     {
         var structure = GetModelFileStructure(modelId, basePath);
-
-        // Create all directories in hierarchy
         Directory.CreateDirectory(structure.ModelsPath);
-        Directory.CreateDirectory(structure.ModelTypePath);
-        Directory.CreateDirectory(structure.PublisherPath);
         Directory.CreateDirectory(structure.ModelNamePath);
     }
 
     /// <summary>
-    /// Creates the downloads directory
+    /// Creates all necessary directories for a collection
     /// </summary>
-    public static void EnsureDownloadsDirectoryExists(string basePath)
+    public static void EnsureModelDirectoriesExist(string collectionId, string basePath)
     {
-        var downloadsDir = Path.Combine(basePath, DownloadsDirectory);
-        Directory.CreateDirectory(downloadsDir);
+        var modelsPath = Path.Combine(basePath, "models");
+        var collectionPath = GetModelDirectoryPath(collectionId, basePath);
+
+        Directory.CreateDirectory(modelsPath);
+        Directory.CreateDirectory(collectionPath);
     }
 
     /// <summary>
-    /// Ensures all base directories exist
+    /// Ensures base directories exist
     /// </summary>
-    public static void EnsureBaseDirectoriesExist(string basePath)
+    public static void EnsureBaseDirectoriesExists(string basePath)
     {
-        // Ensure base directory exists
         Directory.CreateDirectory(basePath);
-
-        // Ensure models directory exists
         Directory.CreateDirectory(Path.Combine(basePath, "models"));
-
-        // Ensure downloads directory exists
-        EnsureDownloadsDirectoryExists(basePath);
-
-        // Create directories for each model type
-        foreach (var modelType in Enum.GetValues<ModelType>())
-        {
-            var modelTypeDashCase = modelType.ToString().ToLowerInvariant().Replace("_", "-");
-            var typeDirPath = Path.Combine(basePath, "models", modelTypeDashCase);
-            Directory.CreateDirectory(typeDirPath);
-        }
     }
 
     /// <summary>
@@ -252,18 +160,15 @@ public static class FileSystemHelper
             return null;
         }
 
-        // Try each preferred format in order
         foreach (var format in PreferredModelFormats)
         {
             var files = Directory.GetFiles(modelDirectory, $"*{format}", SearchOption.TopDirectoryOnly);
             if (files.Length > 0)
             {
-                // Return the largest file with this format
                 return files.OrderByDescending(f => new FileInfo(f).Length).First();
             }
         }
 
-        // No model files found
         return null;
     }
 
@@ -293,7 +198,6 @@ public static class FileSystemHelper
     /// </summary>
     public static string? VerifyModelFilePath(string modelPath, ModelType modelType)
     {
-        // If it's a direct file path
         if (File.Exists(modelPath))
         {
             string extension = Path.GetExtension(modelPath).ToLowerInvariant();
@@ -303,7 +207,6 @@ public static class FileSystemHelper
             }
         }
 
-        // If it's a directory, try to find the main model file
         if (Directory.Exists(modelPath))
         {
             return FindMainModelFile(modelPath);
@@ -339,7 +242,7 @@ public static class FileSystemHelper
     /// <summary>
     /// Determines if a file is likely a model file based on extension and minimum size
     /// </summary>
-    public static bool IsLikelyModelFile(string filePath, long minimumSize = 1024 * 1024) // 1MB minimum
+    public static bool IsLikelyModelFile(string filePath, long minimumSize = 1024 * 1024)
     {
         if (!File.Exists(filePath))
         {
@@ -354,5 +257,70 @@ public static class FileSystemHelper
 
         var fileInfo = new FileInfo(filePath);
         return fileInfo.Length >= minimumSize;
+    }
+
+    /// <summary>
+    /// Scans for all model metadata files in the models directory
+    /// </summary>
+    public static IEnumerable<string> FindAllModelMetadataFiles(string basePath)
+    {
+        var modelsPath = Path.Combine(basePath, "models");
+        if (!Directory.Exists(modelsPath))
+        {
+            yield break;
+        }
+
+        // Scan all collection directories for metadata files
+        foreach (var collectionDir in Directory.GetDirectories(modelsPath))
+        {
+            var metadataFiles = Directory.GetFiles(collectionDir, $"*{MetadataFileExtension}", SearchOption.TopDirectoryOnly);
+            foreach (var metadataFile in metadataFiles)
+            {
+                yield return metadataFile;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets collection ID from a metadata file path
+    /// </summary>
+    public static string? GetCollectionIdFromMetadataPath(string metadataFilePath, string basePath)
+    {
+        var modelsPath = Path.Combine(basePath, "models");
+        var relativePath = Path.GetRelativePath(modelsPath, metadataFilePath);
+
+        var pathParts = relativePath.Split(Path.DirectorySeparatorChar);
+        if (pathParts.Length >= 2)
+        {
+            // Return the collection directory name (first part of the path)
+            return pathParts[0].FromFileNameSafe();
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Creates a safe file name by replacing invalid characters
+    /// </summary>
+    public static string ToFileNameSafe(this string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return "unknown";
+
+        var invalidChars = Path.GetInvalidFileNameChars().Concat(Path.GetInvalidPathChars()).ToArray();
+        return new string(input.Select(c => invalidChars.Contains(c) ? '_' : c).ToArray());
+    }
+
+    /// <summary>
+    /// Converts a safe file name back to original format
+    /// </summary>
+    public static string FromFileNameSafe(this string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return "";
+
+        // For now, just return as-is since we're using simple underscore replacement
+        // In the future, we might need more sophisticated encoding/decoding
+        return input.Replace("_", "/");
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace LMSupplyDepots.ModelHub.Models;
+namespace LMSupplyDepots.ModelHub.Models;
 
 /// <summary>
 /// Represents the progress of a model download operation.
@@ -48,10 +48,53 @@ public class ModelDownloadProgress
     /// <summary>
     /// Gets the progress percentage (0-100).
     /// </summary>
-    public double ProgressPercentage =>
-        TotalBytes.HasValue && TotalBytes.Value > 0
-            ? Math.Min(100.0, (BytesDownloaded * 100.0) / TotalBytes.Value)
-            : 0;
+    public double ProgressPercentage
+    {
+        get
+        {
+            if (!TotalBytes.HasValue || TotalBytes.Value <= 0)
+                return 0;
+
+            var percentage = Math.Min(100.0, (BytesDownloaded * 100.0) / TotalBytes.Value);
+            return Math.Max(0.0, percentage); // Ensure it's never negative
+        }
+    }
+
+    /// <summary>
+    /// Creates a new progress instance with updated status
+    /// </summary>
+    public ModelDownloadProgress WithStatus(ModelDownloadStatus newStatus)
+    {
+        return new ModelDownloadProgress
+        {
+            ModelId = ModelId,
+            FileName = FileName,
+            BytesDownloaded = BytesDownloaded,
+            TotalBytes = TotalBytes,
+            BytesPerSecond = BytesPerSecond,
+            EstimatedTimeRemaining = EstimatedTimeRemaining,
+            Status = newStatus,
+            ErrorMessage = ErrorMessage
+        };
+    }
+
+    /// <summary>
+    /// Creates a new progress instance with updated bytes downloaded
+    /// </summary>
+    public ModelDownloadProgress WithBytesDownloaded(long newBytesDownloaded)
+    {
+        return new ModelDownloadProgress
+        {
+            ModelId = ModelId,
+            FileName = FileName,
+            BytesDownloaded = newBytesDownloaded,
+            TotalBytes = TotalBytes,
+            BytesPerSecond = BytesPerSecond,
+            EstimatedTimeRemaining = EstimatedTimeRemaining,
+            Status = Status,
+            ErrorMessage = ErrorMessage
+        };
+    }
 
     /// <summary>
     /// Gets a formatted string representation of the download progress.
@@ -143,6 +186,40 @@ public class ModelDownloadProgress
             EstimatedTimeRemaining = null,
             Status = ModelDownloadStatus.Failed,
             ErrorMessage = errorMessage
+        };
+    }
+
+    /// <summary>
+    /// Creates a progress instance for a paused download.
+    /// </summary>
+    public static ModelDownloadProgress CreatePaused(string modelId, string fileName, long bytesDownloaded, long? totalBytes)
+    {
+        return new ModelDownloadProgress
+        {
+            ModelId = modelId,
+            FileName = fileName,
+            BytesDownloaded = bytesDownloaded,
+            TotalBytes = totalBytes,
+            BytesPerSecond = 0,
+            EstimatedTimeRemaining = null,
+            Status = ModelDownloadStatus.Paused
+        };
+    }
+
+    /// <summary>
+    /// Creates a progress instance for a downloading state.
+    /// </summary>
+    public static ModelDownloadProgress CreateDownloading(string modelId, string fileName, long bytesDownloaded, long? totalBytes, double bytesPerSecond, TimeSpan? estimatedTimeRemaining = null)
+    {
+        return new ModelDownloadProgress
+        {
+            ModelId = modelId,
+            FileName = fileName,
+            BytesDownloaded = bytesDownloaded,
+            TotalBytes = totalBytes,
+            BytesPerSecond = bytesPerSecond,
+            EstimatedTimeRemaining = estimatedTimeRemaining,
+            Status = ModelDownloadStatus.Downloading
         };
     }
 }

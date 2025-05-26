@@ -1,10 +1,3 @@
-using System.Collections.Concurrent;
-using System.Text.Json;
-using LMSupplyDepots.Interfaces;
-using LMSupplyDepots.ModelHub.Utils;
-using LMSupplyDepots.Utils;
-using Microsoft.Extensions.Options;
-
 namespace LMSupplyDepots.ModelHub.Repositories;
 
 /// <summary>
@@ -53,7 +46,7 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
             return modelByAlias;
         }
 
-        // Try to parse as a model identifier
+        // Try to parse as a model identifier and load from file
         if (ModelIdentifier.TryParse(keyOrId, out var identifier))
         {
             var metadataFilePath = FileSystemHelper.GetMetadataFilePath(identifier, _baseDirectory);
@@ -204,15 +197,6 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
                 {
                     Directory.Delete(modelDirPath, true);
                     _logger.LogInformation("Deleted model directory: {DirPath}", modelDirPath);
-
-                    // Clean up empty parent directories
-                    var publisherDirPath = Path.GetDirectoryName(modelDirPath);
-                    if (publisherDirPath != null && Directory.Exists(publisherDirPath) &&
-                        !Directory.EnumerateFileSystemEntries(publisherDirPath).Any())
-                    {
-                        Directory.Delete(publisherDirPath);
-                        _logger.LogInformation("Deleted empty publisher directory: {DirPath}", publisherDirPath);
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -248,59 +232,11 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
     }
 
     /// <summary>
-    /// Gets the path to the download status file (simplified)
-    /// </summary>
-    public string GetDownloadStatusFilePath(string modelId, ModelType modelType, string? artifactName = null)
-    {
-        var downloadsDir = Path.Combine(_baseDirectory, ".downloads");
-        Directory.CreateDirectory(downloadsDir);
-
-        var safeFileName = modelId.ToFileNameSafe();
-        return Path.Combine(downloadsDir, $"{safeFileName}.download");
-    }
-
-    /// <summary>
-    /// Gets the path to the model directory
+    /// Gets the path to the model directory (legacy support)
     /// </summary>
     public string GetModelDirectoryPath(string modelId, ModelType modelType)
     {
-        if (ModelIdentifier.TryParse(modelId, out var identifier))
-        {
-            // Apply the model type from parameter
-            identifier = identifier.WithModelType(modelType);
-            return FileSystemHelper.GetModelDirectoryPath(identifier, _baseDirectory);
-        }
-
-        // Legacy fallback for backward compatibility
-        var typeDashCase = modelType.ToString().ToLowerInvariant().Replace("_", "-");
-
-        // If model ID has repo/artifact format, handle accordingly
-        if (modelId.Contains('/'))
-        {
-            var parts = modelId.Split('/');
-
-            if (parts.Length >= 3 && modelId.Contains(':'))
-            {
-                // hf:owner/repo/artifact format
-                var registryPart = parts[0];
-                var registry = registryPart.Contains(':') ? registryPart.Split(':')[0] : "hf";
-                var publisher = registryPart.Contains(':') ? registryPart.Split(':')[1] : parts[0];
-                var repo = parts[1];
-
-                return Path.Combine(_baseDirectory, "models", typeDashCase, publisher, repo);
-            }
-            else if (parts.Length >= 2)
-            {
-                // owner/repo format
-                var publisher = parts[0];
-                var repo = parts[1];
-
-                return Path.Combine(_baseDirectory, "models", typeDashCase, publisher, repo);
-            }
-        }
-
-        // If no clear structure, use a simple path
-        return Path.Combine(_baseDirectory, "models", typeDashCase, "local", modelId.ToFileNameSafe());
+        return FileSystemHelper.GetModelDirectoryPath(modelId, modelType, _baseDirectory);
     }
 
     /// <summary>
@@ -315,7 +251,7 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
         {
             if (_initialized) return;
 
-            FileSystemHelper.EnsureBaseDirectoriesExist(_baseDirectory);
+            FileSystemHelper.EnsureBaseDirectoriesExists(_baseDirectory);
             await ScanForModelsAsync(cancellationToken);
 
             _initialized = true;
@@ -327,154 +263,21 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
     }
 
     /// <summary>
-    /// Scans for models in the file system
+    /// Scans for models by finding all metadata files
     /// </summary>
     private async Task ScanForModelsAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Scanning for models in {BaseDir}", _baseDirectory);
 
-        // Scan the new structure
-        await ScanNewStructureAsync(_baseDirectory, cancellationToken);
+        // Use the helper to find all metadata files
+        var metadataFiles = FileSystemHelper.FindAllModelMetadataFiles(_baseDirectory);
 
-        // Also scan legacy structure if needed
-        await ScanLegacyStructureAsync(_baseDirectory, cancellationToken);
+        foreach (var metadataFile in metadataFiles)
+        {
+            await LoadModelFromMetadataFileAsync(metadataFile, cancellationToken);
+        }
 
         _logger.LogInformation("Loaded {Count} models from disk", _cache.Count);
-    }
-
-    /// <summary>
-    /// Scans the new file structure for models
-    /// </summary>
-    private async Task ScanNewStructureAsync(string basePath, CancellationToken cancellationToken)
-    {
-        var modelsPath = Path.Combine(basePath, "models");
-        if (!Directory.Exists(modelsPath))
-        {
-            return;
-        }
-
-        // Scan each model type directory
-        foreach (var modelTypeDir in Directory.GetDirectories(modelsPath))
-        {
-            var modelTypeName = Path.GetFileName(modelTypeDir);
-
-            // Scan publisher directories
-            foreach (var publisherDir in Directory.GetDirectories(modelTypeDir))
-            {
-                var publisherName = Path.GetFileName(publisherDir);
-
-                // Scan model name directories
-                foreach (var modelNameDir in Directory.GetDirectories(publisherDir))
-                {
-                    var modelName = Path.GetFileName(modelNameDir);
-
-                    // Look for metadata files
-                    var metadataFiles = Directory.GetFiles(modelNameDir, $"*{FileSystemHelper.MetadataFileExtension}");
-                    foreach (var metadataFile in metadataFiles)
-                    {
-                        await LoadModelFromMetadataFileAsync(metadataFile, cancellationToken);
-                    }
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Scans the legacy file structure for models
-    /// </summary>
-    private async Task ScanLegacyStructureAsync(string basePath, CancellationToken cancellationToken)
-    {
-        // Check for legacy SingleFile/MultiFile structure
-        var singleFilePath = Path.Combine(basePath, "SingleFile");
-        if (Directory.Exists(singleFilePath))
-        {
-            await ScanLegacyFileStructureAsync(singleFilePath, false, cancellationToken);
-        }
-
-        // Check for legacy MultiFile structure
-        var multiFilePath = Path.Combine(basePath, "MultiFile");
-        if (Directory.Exists(multiFilePath))
-        {
-            await ScanLegacyFileStructureAsync(multiFilePath, true, cancellationToken);
-        }
-
-        // Check for older structure with ModelType directories
-        foreach (var modelType in Enum.GetValues<ModelType>())
-        {
-            var typeDirPath = Path.Combine(basePath, modelType.ToString());
-            if (Directory.Exists(typeDirPath))
-            {
-                await ScanLegacyTypeStructureAsync(typeDirPath, modelType, cancellationToken);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Scans a legacy file structure (SingleFile/MultiFile)
-    /// </summary>
-    private async Task ScanLegacyFileStructureAsync(string structurePath, bool isMultiFile, CancellationToken cancellationToken)
-    {
-        // Scan all provider directories
-        foreach (var providerDir in Directory.GetDirectories(structurePath))
-        {
-            var providerName = Path.GetFileName(providerDir);
-
-            // Scan all model name directories
-            foreach (var modelNameDir in Directory.GetDirectories(providerDir))
-            {
-                var modelName = Path.GetFileName(modelNameDir);
-
-                if (isMultiFile)
-                {
-                    // For multi-file models, scan artifact directories
-                    foreach (var artifactDir in Directory.GetDirectories(modelNameDir))
-                    {
-                        var artifactName = Path.GetFileName(artifactDir);
-
-                        // Look for metadata file
-                        var metadataFilePath = Path.Combine(artifactDir, $"{artifactName}{FileSystemHelper.MetadataFileExtension}");
-                        if (File.Exists(metadataFilePath))
-                        {
-                            await LoadModelFromMetadataFileAsync(metadataFilePath, cancellationToken);
-                        }
-                    }
-                }
-                else
-                {
-                    // For single-file models, look for metadata files directly in model name directory
-                    var metadataFiles = Directory.GetFiles(modelNameDir, $"*{FileSystemHelper.MetadataFileExtension}");
-                    foreach (var metadataFile in metadataFiles)
-                    {
-                        await LoadModelFromMetadataFileAsync(metadataFile, cancellationToken);
-                    }
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Scans a legacy ModelType directory structure
-    /// </summary>
-    private async Task ScanLegacyTypeStructureAsync(string typeDirPath, ModelType modelType, CancellationToken cancellationToken)
-    {
-        // Scan all provider directories
-        foreach (var providerDir in Directory.GetDirectories(typeDirPath))
-        {
-            var providerName = Path.GetFileName(providerDir);
-
-            // Scan all model name directories
-            foreach (var modelNameDir in Directory.GetDirectories(providerDir))
-            {
-                var modelName = Path.GetFileName(modelNameDir);
-
-                // Look for metadata files
-                var metadataFiles = Directory.GetFiles(modelNameDir, $"*{FileSystemHelper.MetadataFileExtension}");
-                foreach (var metadataFile in metadataFiles)
-                {
-                    await LoadModelFromMetadataFileAsync(metadataFile, cancellationToken);
-                }
-            }
-        }
     }
 
     /// <summary>

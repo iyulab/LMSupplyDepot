@@ -211,14 +211,16 @@ public class ModelManager : IModelManager, IDisposable
         return await _downloadManager.PauseDownloadAsync(modelId, cancellationToken);
     }
 
+    /// <summary>
+    /// Resumes a paused model download with proper status management
+    /// </summary>
     public async Task<LMModel> ResumeDownloadAsync(
         string modelId,
         IProgress<ModelDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        // Get downloader and resume download
-        var downloader = GetDownloader(modelId);
-        var result = await downloader.ResumeDownloadAsync(modelId, progress, cancellationToken);
+        // Use the download manager which handles status properly
+        var result = await _downloadManager.ResumeDownloadAsync(modelId, progress, cancellationToken);
 
         // Save the result to repository
         return await _repository.SaveModelAsync(result, cancellationToken);

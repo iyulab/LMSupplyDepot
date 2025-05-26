@@ -208,7 +208,7 @@ public class V1Controller : ControllerBase
             await foreach (var token in _hostService.GenerateTextStreamAsync(request.Model, request, cancellationToken))
             {
                 var data = new { text = token };
-                var json = JsonSerializer.Serialize(data);
+                var json = JsonHelper.Serialize(data);
                 await Response.WriteAsync($"data: {json}\n\n");
                 await Response.Body.FlushAsync(cancellationToken);
             }

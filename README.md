@@ -18,8 +18,6 @@
 
 LMSupplyDepots는 로컬 환경에서 다양한 오픈소스 LLM을 쉽게 관리하고 실행할 수 있는 플랫폼입니다. 모듈식 아키텍처로 독립적인 컴포넌트 구성을 지원하며, 웹 API와 CLI 인터페이스를 통해 프라이버시를 유지하면서 강력한 AI 기능을 로컬에서 활용할 수 있습니다.
 
-*Similar to Ollama and LM Studio, but with enhanced modularity and extensibility.*
-
 ## ✨ Features
 
 ### 🔧 **로컬 모델 관리**
@@ -193,17 +191,3 @@ LMSupplyDepots.External.OpenAI (독립적)
 ```
 LMSupplyDepots (기본 공통 라이브러리)
 ```
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
-
-## 🙏 Acknowledgments
-
-Special thanks to the open-source community and projects that inspired LMSupplyDepots.

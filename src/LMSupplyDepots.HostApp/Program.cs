@@ -9,14 +9,6 @@ builder.Services.AddLMSupplyDepots(options =>
 {
     // Configure from appsettings.json
     builder.Configuration.GetSection("LMSupplyDepots").Bind(options);
-
-    // Default base directory if not specified
-    if (string.IsNullOrEmpty(options.DataPath))
-    {
-        options.DataPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "LMSupplyDepots");
-    }
 });
 
 // Configure JSON serialization
@@ -51,7 +43,9 @@ else
     app.UseExceptionHandler("/error");
 }
 
-app.UseHttpsRedirection();
+// HTTPS 리디렉션 제거 - HTTP와 HTTPS 모두 허용
+// app.UseHttpsRedirection();
+
 app.UseCors("AllowAll");
 
 // Simple health check endpoint

@@ -1,4 +1,4 @@
-﻿using LMSupplyDepots.Models;
+using LMSupplyDepots.Models;
 using LMSupplyDepots.SDK;
 using Microsoft.Extensions.Logging;
 

@@ -1,0 +1,76 @@
+# LM SupplyDepot
+# @baseUrl = http://localhost:5181
+# @apiBase = {{baseUrl}}/api
+
+# Filer Proxy
+@baseUrl = http://localhost:27010
+@apiBase = {{baseUrl}}/lm/api
+
+@model = hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
+@alias = llama-3-8b
+
+### List available models
+GET {{apiBase}}/models
+
+#### 200 OK
+[{"alias":"llama-3-8b","id":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","name":"Llama-3.2-3B-Instruct-GGUF","description":"bartowski/Llama-3.2-3B-Instruct-GGUF - Tags: gguf, facebook, meta, llama, llama-3 - Created by bartowski","version":"20241008","localPath":"d:/filer-data\\models\\bartowski_Llama-3.2-3B-Instruct-GGUF","capabilities":{"supportsTextGeneration":true,"supportsEmbeddings":false,"supportsImageUnderstanding":false,"maxContextLength":4096},"registry":"hf","repoId":"bartowski/Llama-3.2-3B-Instruct-GGUF","type":"TextGeneration","format":"gguf","artifactName":"Llama-3.2-3B-Instruct-IQ3_M","sizeInBytes":1599668768,"filePaths":["Llama-3.2-3B-Instruct-IQ3_M.gguf"],"isLocal":true}]
+
+### List models with type filter
+GET {{apiBase}}/models?type=TextGeneration
+
+### List models with search term
+GET {{apiBase}}/models?search=llama
+
+### Show model details
+POST {{apiBase}}/show
+Content-Type: application/json
+
+{
+  "name": "{{model}}"
+}
+
+#### 200 OK
+{"alias":"llama-3-8b","id":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","name":"Llama-3.2-3B-Instruct-GGUF","description":"bartowski/Llama-3.2-3B-Instruct-GGUF - Tags: gguf, facebook, meta, llama, llama-3 - Created by bartowski","version":"20241008","localPath":"d:/filer-data\\models\\bartowski_Llama-3.2-3B-Instruct-GGUF","capabilities":{"supportsTextGeneration":true,"supportsEmbeddings":false,"supportsImageUnderstanding":false,"maxContextLength":4096},"registry":"hf","repoId":"bartowski/Llama-3.2-3B-Instruct-GGUF","type":"TextGeneration","format":"gguf","artifactName":"Llama-3.2-3B-Instruct-IQ3_M","sizeInBytes":1599668768,"filePaths":["Llama-3.2-3B-Instruct-IQ3_M.gguf"],"isLocal":true}
+
+### Show model by alias
+POST {{apiBase}}/show
+Content-Type: application/json
+
+{
+  "name": "{{alias}}"
+}
+
+### Get model by alias (using query string)
+GET {{apiBase}}/models/alias?alias={{alias}}
+Accept: application/json
+
+### Check if model is downloaded (using query string)
+GET {{apiBase}}/models/downloaded?model={{model}}
+Accept: application/json
+
+### Check if model is downloaded by alias
+GET {{apiBase}}/models/downloaded?model={{alias}}
+Accept: application/json
+
+### Set model alias
+PUT {{apiBase}}/alias
+Content-Type: application/json
+
+{
+  "name": "{{model}}",
+  "alias": "{{alias}}"
+}
+
+#### 200 OK
+{"status":"success","message":"Alias 'llama-3-8b' set for model 'hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M'","model":{"alias":"llama-3-8b","id":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","name":"Llama-3.2-3B-Instruct-GGUF","description":"bartowski/Llama-3.2-3B-Instruct-GGUF - Tags: gguf, facebook, meta, llama, llama-3 - Created by bartowski","version":"20241008","localPath":"d:/filer-data\\models\\bartowski_Llama-3.2-3B-Instruct-GGUF","capabilities":{"supportsTextGeneration":true,"supportsEmbeddings":false,"supportsImageUnderstanding":false,"maxContextLength":4096},"registry":"hf","repoId":"bartowski/Llama-3.2-3B-Instruct-GGUF","type":"TextGeneration","format":"gguf","artifactName":"Llama-3.2-3B-Instruct-IQ3_M","sizeInBytes":1599668768,"filePaths":["Llama-3.2-3B-Instruct-IQ3_M.gguf"],"isLocal":true}}
+
+### Delete a model
+DELETE {{apiBase}}/delete
+Content-Type: application/json
+
+{
+  "name": "{{alias}}"
+}
+
+#### 200 OK
+{"status":"success"}

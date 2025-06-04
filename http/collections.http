@@ -1,0 +1,166 @@
+# LMSupplyDepot
+@baseUrl = http://localhost:5181
+@apiBase = {{baseUrl}}/api
+
+## Filer Proxy
+# @baseUrl = http://localhost:27010
+# @apiBase = {{baseUrl}}/lm/api
+
+### Discover model collections
+GET {{apiBase}}/collections/discover
+
+#### 200 OK
+[
+    {
+        "id": "hf:modularai/Llama-3.1-8B-Instruct-GGUF",
+        "hub": "hf",
+        "collectionId": "modularai/Llama-3.1-8B-Instruct-GGUF",
+        "name": "Llama-3.1-8B-Instruct-GGUF",
+        "type": "TextGeneration",
+        "defaultFormat": "GGUF",
+        "version": "20240909",
+        "description": "modularai/Llama-3.1-8B-Instruct-GGUF - Tags: gguf, llama, facebook, meta, pytorch - Created by modularai",
+        "publisher": "modularai",
+        "availableArtifacts":
+        [
+            {
+                "name": "llama-3.1-8b-instruct-bf16",
+                "format": "gguf",
+                "sizeInBytes": 0,
+                "filePaths":
+                [
+                    "llama-3.1-8b-instruct-bf16.gguf"
+                ],
+                "description": "GGUF format",
+                "mainFilePath": "llama-3.1-8b-instruct-bf16.gguf"
+            },
+            {
+                "name": "llama-3.1-8b-instruct-f32",
+                "format": "gguf",
+                "sizeInBytes": 0,
+                "filePaths":
+                [
+                    "llama-3.1-8b-instruct-f32.gguf"
+                ],
+                "description": "GGUF format",
+                "mainFilePath": "llama-3.1-8b-instruct-f32.gguf"
+            },
+            {
+                "name": "llama-3.1-8b-instruct-q4_0",
+                "format": "gguf",
+                "sizeInBytes": 0,
+                "filePaths":
+                [
+                    "llama-3.1-8b-instruct-q4_0.gguf"
+                ],
+                "description": "GGUF format",
+                "mainFilePath": "llama-3.1-8b-instruct-q4_0.gguf"
+            },
+            {
+                "name": "llama-3.1-8b-instruct-q4_k_m",
+                "format": "gguf",
+                "sizeInBytes": 0,
+                "filePaths":
+                [
+                    "llama-3.1-8b-instruct-q4_k_m.gguf"
+                ],
+                "description": "GGUF format",
+                "mainFilePath": "llama-3.1-8b-instruct-q4_k_m.gguf"
+            },
+            {
+                "name": "llama-3.1-8b-instruct-q6_k",
+                "format": "gguf",
+                "sizeInBytes": 0,
+                "filePaths":
+                [
+                    "llama-3.1-8b-instruct-q6_k.gguf"
+                ],
+                "description": "GGUF format",
+                "mainFilePath": "llama-3.1-8b-instruct-q6_k.gguf"
+            }
+        ],
+        "capabilities":
+        {
+            "supportsTextGeneration": true,
+            "supportsEmbeddings": false,
+            "supportsImageUnderstanding": false,
+            "maxContextLength": 4096
+        },
+        "tags":
+        [
+            "gguf",
+            "llama",
+            "facebook",
+            "meta",
+            "pytorch",
+            "llama-3",
+            "text-generation",
+            "conversational",
+            "en",
+            "arxiv:2204.05149",
+            "base_model:meta-llama/Llama-3.1-8B-Instruct",
+            "base_model:quantized:meta-llama/Llama-3.1-8B-Instruct",
+            "license:llama3",
+            "region:us"
+        ],
+        "downloads": 1318483,
+        "likes": 14,
+        "createdAt": "2024-09-04T18:48:44",
+        "lastModified": "2024-09-09T16:49:02",
+        "isGated": false,
+        "license": "",
+        "language": ""
+    },
+    ...
+]
+
+### Discover collections with search term
+GET {{apiBase}}/collections/discover?q=llama&limit=10
+
+### Discover collections by type
+GET {{apiBase}}/collections/discover?type=TextGeneration&limit=5
+
+### Get specific collection info (using query string)
+GET {{apiBase}}/collections/info?collectionId=bartowski/Llama-3.2-3B-Instruct-GGUF
+
+#### 200 OK
+{"id":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF","hub":"hf","collectionId":"bartowski/Llama-3.2-3B-Instruct-GGUF","name":"Llama-3.2-3B-Instruct-GGUF","type":"TextGeneration","defaultFormat":"GGUF","version":"20241008","description":"bartowski/Llama-3.2-3B-Instruct-GGUF - Tags: gguf, facebook, meta, llama, llama-3 - Created by bartowski","publisher":"bartowski","availableArtifacts":[{"name":"Llama-3.2-3B-Instruct-IQ3_M","format":"gguf","sizeInBytes":1599668768,"filePaths":["Llama-3.2-3B-Instruct-IQ3_M.gguf"],"description":"GGUF format, Medium size","quantizationBits":3,"sizeCategory":"Medium","mainFilePath":"Llama-3.2-3B-Instruct-IQ3_M.gguf"},{"name":"Llama-3.2-3B-Instruct-IQ4_XS","format":"gguf","sizeInBytes":1829110304,"filePaths":["Llama-3.2-3B-Instruct-IQ4_XS.gguf"],"description":"GGUF format, Q4 quantization, Extra Small size","quantizationBits":4,"sizeCategory":"Extra Small","mainFilePath":"Llama-3.2-3B-Instruct-IQ4_XS.gguf"},{"name":"Llama-3.2-3B-Instruct-Q3_K_L","format":"gguf","sizeInBytes":1815347744,"filePaths":["Llama-3.2-3B-Instruct-Q3_K_L.gguf"],"description":"GGUF format, Large size","quantizationBits":3,"sizeCategory":"Large","mainFilePath":"Llama-3.2-3B-Instruct-Q3_K_L.gguf"},{"name":"Llama-3.2-3B-Instruct-Q3_K_XL","format":"gguf","sizeInBytes":1910770208,"filePaths":["Llama-3.2-3B-Instruct-Q3_K_XL.gguf"],"description":"GGUF format, Extra Large size","quantizationBits":3,"sizeCategory":"Extra Large","mainFilePath":"Llama-3.2-3B-Instruct-Q3_K_XL.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_0","format":"gguf","sizeInBytes":1921909280,"filePaths":["Llama-3.2-3B-Instruct-Q4_0.gguf"],"description":"GGUF format, Q4 quantization","quantizationBits":4,"mainFilePath":"Llama-3.2-3B-Instruct-Q4_0.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_0_4_4","format":"gguf","sizeInBytes":1917190688,"filePaths":["Llama-3.2-3B-Instruct-Q4_0_4_4.gguf"],"description":"GGUF format, Q4 quantization","quantizationBits":4,"mainFilePath":"Llama-3.2-3B-Instruct-Q4_0_4_4.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_0_4_8","format":"gguf","sizeInBytes":1917190688,"filePaths":["Llama-3.2-3B-Instruct-Q4_0_4_8.gguf"],"description":"GGUF format, Q4 quantization","quantizationBits":4,"mainFilePath":"Llama-3.2-3B-Instruct-Q4_0_4_8.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_0_8_8","format":"gguf","sizeInBytes":1917190688,"filePaths":["Llama-3.2-3B-Instruct-Q4_0_8_8.gguf"],"description":"GGUF format, Q4 quantization","quantizationBits":4,"mainFilePath":"Llama-3.2-3B-Instruct-Q4_0_8_8.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_K_L","format":"gguf","sizeInBytes":2114800160,"filePaths":["Llama-3.2-3B-Instruct-Q4_K_L.gguf"],"description":"GGUF format, Q4 quantization, Large size","quantizationBits":4,"sizeCategory":"Large","mainFilePath":"Llama-3.2-3B-Instruct-Q4_K_L.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_K_M","format":"gguf","sizeInBytes":2019377696,"filePaths":["Llama-3.2-3B-Instruct-Q4_K_M.gguf"],"description":"GGUF format, Q4 quantization, Medium size","quantizationBits":4,"sizeCategory":"Medium","mainFilePath":"Llama-3.2-3B-Instruct-Q4_K_M.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_K_S","format":"gguf","sizeInBytes":1928200736,"filePaths":["Llama-3.2-3B-Instruct-Q4_K_S.gguf"],"description":"GGUF format, Q4 quantization, Small size","quantizationBits":4,"sizeCategory":"Small","mainFilePath":"Llama-3.2-3B-Instruct-Q4_K_S.gguf"},{"name":"Llama-3.2-3B-Instruct-Q5_K_L","format":"gguf","sizeInBytes":2417576480,"filePaths":["Llama-3.2-3B-Instruct-Q5_K_L.gguf"],"description":"GGUF format, Q5 quantization, Large size","quantizationBits":5,"sizeCategory":"Large","mainFilePath":"Llama-3.2-3B-Instruct-Q5_K_L.gguf"},{"name":"Llama-3.2-3B-Instruct-Q5_K_M","format":"gguf","sizeInBytes":2322154016,"filePaths":["Llama-3.2-3B-Instruct-Q5_K_M.gguf"],"description":"GGUF format, Q5 quantization, Medium size","quantizationBits":5,"sizeCategory":"Medium","mainFilePath":"Llama-3.2-3B-Instruct-Q5_K_M.gguf"},{"name":"Llama-3.2-3B-Instruct-Q5_K_S","format":"gguf","sizeInBytes":2269512224,"filePaths":["Llama-3.2-3B-Instruct-Q5_K_S.gguf"],"description":"GGUF format, Q5 quantization, Small size","quantizationBits":5,"sizeCategory":"Small","mainFilePath":"Llama-3.2-3B-Instruct-Q5_K_S.gguf"},{"name":"Llama-3.2-3B-Instruct-Q6_K","format":"gguf","sizeInBytes":2643853856,"filePaths":["Llama-3.2-3B-Instruct-Q6_K.gguf"],"description":"GGUF format","quantizationBits":6,"mainFilePath":"Llama-3.2-3B-Instruct-Q6_K.gguf"},{"name":"Llama-3.2-3B-Instruct-Q6_K_L","format":"gguf","sizeInBytes":2739276320,"filePaths":["Llama-3.2-3B-Instruct-Q6_K_L.gguf"],"description":"GGUF format, Large size","quantizationBits":6,"sizeCategory":"Large","mainFilePath":"Llama-3.2-3B-Instruct-Q6_K_L.gguf"},{"name":"Llama-3.2-3B-Instruct-Q8_0","format":"gguf","sizeInBytes":3421899296,"filePaths":["Llama-3.2-3B-Instruct-Q8_0.gguf"],"description":"GGUF format, Q8 quantization","quantizationBits":8,"mainFilePath":"Llama-3.2-3B-Instruct-Q8_0.gguf"},{"name":"Llama-3.2-3B-Instruct-f16","format":"gguf","sizeInBytes":6433687840,"filePaths":["Llama-3.2-3B-Instruct-f16.gguf"],"description":"GGUF format","mainFilePath":"Llama-3.2-3B-Instruct-f16.gguf"}],"capabilities":{"supportsTextGeneration":true,"supportsEmbeddings":false,"supportsImageUnderstanding":false,"maxContextLength":4096},"tags":["gguf","facebook","meta","llama","llama-3","text-generation","en","de","fr","it","pt","hi","es","th","base_model:meta-llama/Llama-3.2-3B-Instruct","base_model:quantized:meta-llama/Llama-3.2-3B-Instruct","license:llama3.2","endpoints_compatible","region:us","conversational"],"downloads":104789,"likes":128,"createdAt":"2024-09-25T18:35:33","lastModified":"2024-10-08T14:01:10","isGated":false,"license":"","language":""}
+
+### Get collection info for embedding model
+GET {{apiBase}}/collections/info?collectionId=sentence-transformers/all-MiniLM-L6-v2
+
+### Get all models from a collection (using query string)
+GET {{apiBase}}/collections/models?collectionId=bartowski/Llama-3.2-3B-Instruct-GGUF
+
+#### 200 OK
+[
+    {
+        "alias": "",
+        "id": "hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M",
+        "name": "Llama-3.2-3B-Instruct-GGUF (Llama-3.2-3B-Instruct-IQ3_M)",
+        "description": "GGUF format, Medium size",
+        "version": "20241008",
+        "capabilities":
+        {
+            "supportsTextGeneration": true,
+            "supportsEmbeddings": false,
+            "supportsImageUnderstanding": false,
+            "maxContextLength": 4096
+        },
+        "registry": "hf",
+        "repoId": "bartowski/Llama-3.2-3B-Instruct-GGUF",
+        "type": "TextGeneration",
+        "format": "gguf",
+        "artifactName": "Llama-3.2-3B-Instruct-IQ3_M",
+        "sizeInBytes": 1599668768,
+        "filePaths":
+        [
+            "Llama-3.2-3B-Instruct-IQ3_M.gguf"
+        ],
+        "isLocal": false
+    },
+    ...
+]
+
+### Get models from embedding collection
+GET {{apiBase}}/collections/models?collectionId=sentence-transformers/all-MiniLM-L6-v2

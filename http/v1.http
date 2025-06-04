@@ -1,0 +1,118 @@
+### V1 API Tests (OpenAI Compatible)
+@baseUrl = http://localhost:5181
+@v1Base = {{baseUrl}}/v1
+
+@model = hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
+@alias = llama-3-8b
+
+### List loaded models (shows alias if available, otherwise ID)
+GET {{v1Base}}/models
+Accept: application/json
+
+### Generate text with alias
+POST {{v1Base}}/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "prompt": "Write a short poem about artificial intelligence.",
+  "max_tokens": 500,
+  "temperature": 0.7,
+  "top_p": 0.95,
+  "stream": false
+}
+
+### Generate text with full model ID
+POST {{v1Base}}/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{model}}",
+  "prompt": "Explain machine learning in simple terms.",
+  "max_tokens": 300,
+  "temperature": 0.7,
+  "top_p": 0.95,
+  "stream": false
+}
+
+### Generate text with streaming
+POST {{v1Base}}/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "prompt": "Write a short story about a robot who discovers emotions.",
+  "max_tokens": 1000,
+  "temperature": 0.8,
+  "top_p": 0.95,
+  "stream": true
+}
+
+### Generate text (dedicated streaming endpoint)
+POST {{v1Base}}/chat/completions/stream
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "prompt": "Explain quantum computing in simple terms.",
+  "max_tokens": 400,
+  "temperature": 0.7,
+  "top_p": 0.95
+}
+
+### Generate embeddings with alias
+POST {{v1Base}}/embeddings
+Content-Type: application/json
+
+{
+  "model": "embedding-model",
+  "texts": [
+    "This is the first sentence to embed.",
+    "This is the second, somewhat longer sentence for embedding.",
+    "A third, completely different sentence about artificial intelligence."
+  ],
+  "normalize": true
+}
+
+### Generate embeddings with full model ID
+POST {{v1Base}}/embeddings
+Content-Type: application/json
+
+{
+  "model": "hf:sentence-transformers/all-MiniLM-L6-v2",
+  "texts": [
+    "Machine learning is a subset of artificial intelligence.",
+    "Deep learning uses neural networks with multiple layers.",
+    "Natural language processing helps computers understand human language."
+  ],
+  "normalize": true
+}
+
+### Test error handling - non-existent model
+POST {{v1Base}}/chat/completions
+Content-Type: application/json
+
+{
+  "model": "non-existent-model",
+  "prompt": "This should fail.",
+  "max_tokens": 10
+}
+
+### Test error handling - embedding model for text generation
+POST {{v1Base}}/chat/completions
+Content-Type: application/json
+
+{
+  "model": "embedding-model",
+  "prompt": "This should fail because it's an embedding model.",
+  "max_tokens": 10
+}
+
+### Test error handling - text model for embeddings
+POST {{v1Base}}/embeddings
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "texts": ["This should fail because it's a text generation model."]
+}

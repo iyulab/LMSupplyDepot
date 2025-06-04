@@ -1,0 +1,230 @@
+# .github/workflows/release.yml
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'hostapp_v*'  # e.g., hostapp_v0.1.0
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+        
+    - name: Debug project structure
+      run: |
+        echo "Current directory contents:"
+        Get-ChildItem -Path . -Recurse -Name "*.csproj" | Where-Object { $_ -like "*HostApp*" }
+        echo "Checking src directory:"
+        Get-ChildItem -Path "src/" -Recurse -Name "*.csproj" | Where-Object { $_ -like "*HostApp*" }
+      shell: powershell
+        
+    - name: Restore dependencies
+      run: dotnet restore src/
+      
+    - name: Build and Publish
+      run: |
+        dotnet publish src/LMSupplyDepots.HostApp/LMSupplyDepots.HostApp.csproj `
+          -c Release `
+          -o output/host-app
+    
+    - name: Get version from tag
+      id: version
+      run: |
+        $tag = $env:GITHUB_REF -replace 'refs/tags/', ''
+        if ($tag -match '^hostapp_v(.+)$') {
+          $version = $matches[1]
+        } elseif ($tag -match '^v(.+)$') {
+          $version = $matches[1]
+        } else {
+          $version = $tag
+        }
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "TAG=$tag" >> $env:GITHUB_OUTPUT
+        echo "Version: $version, Tag: $tag"
+      shell: powershell
+      
+    - name: Discover runtime platforms
+      id: platforms
+      run: |
+        $runtimesPath = "output/host-app/runtimes"
+        if (Test-Path $runtimesPath) {
+          $platforms = Get-ChildItem -Path $runtimesPath -Directory | Select-Object -ExpandProperty Name
+          $platformsJson = $platforms | ConvertTo-Json -Compress
+          echo "PLATFORMS=$platformsJson" >> $env:GITHUB_OUTPUT
+          echo "Found platforms: $($platforms -join ', ')"
+        } else {
+          echo "PLATFORMS=[]" >> $env:GITHUB_OUTPUT
+          echo "No runtimes directory found"
+        }
+      shell: powershell
+      
+    - name: Create platform-specific ZIP archives
+      id: zip
+      run: |
+        $version = "${{ steps.version.outputs.VERSION }}"
+        $platforms = '${{ steps.platforms.outputs.PLATFORMS }}' | ConvertFrom-Json
+        $zipFiles = @()
+        
+        # Create base directory structure for each platform
+        foreach ($platform in $platforms) {
+          $platformDir = "output/platform-$platform"
+          New-Item -ItemType Directory -Path $platformDir -Force | Out-Null
+          
+          # Copy main application files (excluding runtimes)
+          Get-ChildItem -Path "output/host-app" -Exclude "runtimes" | Copy-Item -Destination $platformDir -Recurse -Force
+          
+          # Copy platform-specific runtime files
+          $runtimeSource = "output/host-app/runtimes/$platform"
+          $runtimeDest = "$platformDir/runtimes/$platform"
+          if (Test-Path $runtimeSource) {
+            New-Item -ItemType Directory -Path "$platformDir/runtimes" -Force | Out-Null
+            Copy-Item -Path $runtimeSource -Destination "$platformDir/runtimes" -Recurse -Force
+          }
+          
+          # Create ZIP file for this platform
+          $zipFile = "LMSupplyDepots.HostApp-v$version-$platform.zip"
+          Compress-Archive -Path "$platformDir/*" -DestinationPath $zipFile -Force
+          $zipFiles += $zipFile
+          
+          echo "Created ZIP for $platform`: $zipFile"
+        }
+        
+        # Also create a full ZIP with all platforms (original behavior)
+        $fullZipFile = "LMSupplyDepots.HostApp-v$version-all-platforms.zip"
+        Compress-Archive -Path "output/host-app/*" -DestinationPath $fullZipFile -Force
+        $zipFiles += $fullZipFile
+        
+        # Convert array to JSON for output
+        $zipFilesJson = $zipFiles | ConvertTo-Json -Compress
+        echo "ZIP_FILES=$zipFilesJson" >> $env:GITHUB_OUTPUT
+        echo "All ZIP files created: $($zipFiles -join ', ')"
+      shell: powershell
+      
+    - name: Generate Release Notes
+      id: notes
+      run: |
+        $version = "${{ steps.version.outputs.VERSION }}"
+        $platforms = '${{ steps.platforms.outputs.PLATFORMS }}' | ConvertFrom-Json
+        
+        # Build download links section
+        $downloadLinks = @()
+        $downloadLinks += "### Downloads"
+        $downloadLinks += ""
+        
+        # Add platform-specific downloads
+        foreach ($platform in $platforms) {
+          $friendlyName = switch ($platform) {
+            "win-x64" { "Windows x64" }
+            "linux-x64" { "Linux x64" }
+            "linux-arm64" { "Linux ARM64" }
+            "linux-musl-x64" { "Linux x64 (Alpine/musl)" }
+            "osx-x64" { "macOS x64 (Intel)" }
+            "osx-arm64" { "macOS ARM64 (Apple Silicon)" }
+            default { $platform }
+          }
+          $downloadLinks += "- **$friendlyName**: ``LMSupplyDepots.HostApp-v$version-$platform.zip``"
+        }
+        
+        $downloadLinks += "- **All Platforms**: ``LMSupplyDepots.HostApp-v$version-all-platforms.zip``"
+        $downloadLinks += ""
+        
+        $notes = @"
+        ## LMSupplyDepots HostApp v$version
+        
+        $($downloadLinks -join "`n")
+        
+        ### Installation Instructions
+        1. Download the appropriate ZIP file for your platform
+        2. Extract the ZIP file to your desired location
+        3. Run ``LMSupplyDepots.HostApp.exe`` (Windows) or the appropriate executable
+        
+        ### Platform Support
+        This release includes optimized builds for the following platforms:
+        $($platforms | ForEach-Object { "- $_" } | Out-String)
+        
+        ### System Requirements
+        - .NET 9.0 Runtime required for your platform
+        - Supported architectures: x64, ARM64
+        - Operating Systems: Windows 10/11, Linux (glibc/musl), macOS 10.15+
+        
+        ### Hardware Acceleration Support
+        - **CUDA**: CUDA 11.x and 12.x support included
+        - **Vulkan**: Cross-platform GPU acceleration
+        - **Metal**: macOS GPU acceleration (ARM64)
+        - **AVX/AVX2/AVX512**: CPU optimization variants
+        
+        ### What's New
+        - Latest code changes and improvements
+        - Bug fixes and stability enhancements
+        - Performance optimizations
+        - Multi-platform native library support
+        
+        ### Choosing the Right Download
+        - **Windows users**: Download the ``win-x64`` version
+        - **Linux users**: Download ``linux-x64`` (standard) or ``linux-musl-x64`` (Alpine/musl)
+        - **macOS Intel**: Download ``osx-x64``
+        - **macOS Apple Silicon**: Download ``osx-arm64``
+        - **ARM Linux**: Download ``linux-arm64``
+        - **Unsure**: Download the ``all-platforms`` version (larger file size)
+        
+        ### Support
+        If you encounter any issues, please create an issue in this repository.
+        "@
+        
+        # Write to file with proper encoding
+        [System.IO.File]::WriteAllText("release_notes.txt", $notes, [System.Text.UTF8Encoding]::new($false))
+        
+        # Set output for GitHub Actions
+        echo "RELEASE_NOTES<<EOF" >> $env:GITHUB_OUTPUT
+        Get-Content -Path release_notes.txt -Raw | ForEach-Object { $_ -split "`n" } | ForEach-Object { echo $_ >> $env:GITHUB_OUTPUT }
+        echo "EOF" >> $env:GITHUB_OUTPUT
+      shell: powershell
+
+    - name: Delete existing release if exists
+      continue-on-error: true
+      run: |
+        $tag = "${{ steps.version.outputs.TAG }}"
+        try {
+          gh release delete $tag --yes --cleanup-tag
+          echo "Deleted existing release: $tag"
+        } catch {
+          echo "No existing release found or deletion failed (this is normal for new releases)"
+        }
+      shell: powershell
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.TAG }}
+        name: LMSupplyDepots HostApp v${{ steps.version.outputs.VERSION }}
+        body: ${{ steps.notes.outputs.RELEASE_NOTES }}
+        files: |
+          LMSupplyDepots.HostApp-v${{ steps.version.outputs.VERSION }}-*.zip
+        draft: false
+        prerelease: false
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Success notification
+      run: |
+        $zipFiles = '${{ steps.zip.outputs.ZIP_FILES }}' | ConvertFrom-Json
+        echo "========================================="
+        echo "Release v${{ steps.version.outputs.VERSION }} created successfully!"
+        echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.TAG }}"
+        echo "ZIP Files created:"
+        foreach ($zipFile in $zipFiles) {
+          echo "  - $zipFile"
+        }
+        echo "========================================="

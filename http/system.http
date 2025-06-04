@@ -1,0 +1,11 @@
+### System API Tests
+@baseUrl = http://localhost:5181
+@apiBase = {{baseUrl}}/api
+
+### Get Health Information
+GET {{apiBase}}/health
+Accept: application/json
+
+### Get System Configuration
+GET {{apiBase}}/config
+Accept: application/json

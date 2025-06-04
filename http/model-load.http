@@ -1,0 +1,99 @@
+### Model Loading API Tests
+@baseUrl = http://localhost:5181
+@apiBase = {{baseUrl}}/api/models
+
+@model = hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
+@alias = llama-3-8b
+
+### Load a model with alias
+POST {{apiBase}}/load
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "parameters": {
+    "gpu_layers": 26,
+    "threads": 4,
+    "context_size": 4096,
+    "batch_size": 512
+  }
+}
+
+### Load model by full ID
+POST {{apiBase}}/load
+Content-Type: application/json
+
+{
+  "model": "{{model}}",
+  "parameters": {
+    "gpu_layers": 20,
+    "threads": 8,
+    "context_size": 2048
+  }
+}
+
+### Load embedding model
+POST {{apiBase}}/load
+Content-Type: application/json
+
+{
+  "model": "hf:sentence-transformers/all-MiniLM-L6-v2",
+  "parameters": {
+    "gpu_layers": 0,
+    "threads": 4
+  }
+}
+
+### Load embedding model by alias
+POST {{apiBase}}/load
+Content-Type: application/json
+
+{
+  "model": "embedding-model",
+  "parameters": {
+    "gpu_layers": 0,
+    "threads": 4
+  }
+}
+
+### Load model with CPU-only configuration
+POST {{apiBase}}/load
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "parameters": {
+    "gpu_layers": 0,
+    "threads": 8,
+    "context_size": 2048,
+    "batch_size": 256
+  }
+}
+
+### Unload a model by alias
+POST {{apiBase}}/unload
+Content-Type: application/json
+
+{
+  "model": "{{alias}}"
+}
+
+### Unload model by full ID
+POST {{apiBase}}/unload
+Content-Type: application/json
+
+{
+  "model": "{{model}}"
+}
+
+### Unload embedding model
+POST {{apiBase}}/unload
+Content-Type: application/json
+
+{
+  "model": "embedding-model"
+}
+
+### Get all currently loaded models
+GET {{apiBase}}/loaded
+Accept: application/json

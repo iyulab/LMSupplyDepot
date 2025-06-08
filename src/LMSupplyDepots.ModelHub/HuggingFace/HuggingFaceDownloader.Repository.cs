@@ -3,7 +3,7 @@ using LMSupplyDepots.External.HuggingFace.Models;
 namespace LMSupplyDepots.ModelHub.HuggingFace;
 
 /// <summary>
-/// Implementation of collection information operations with accurate size handling
+/// Implementation of collection information operations with optimized discovery vs detailed info
 /// </summary>
 public partial class HuggingFaceDownloader
 {
@@ -17,12 +17,12 @@ public partial class HuggingFaceDownloader
         var collection = await GetCollectionInfoAsync(collectionId, cancellationToken);
 
         _logger.LogInformation("Collection {CollectionId} has {Count} available artifacts",
-            collectionId, collection.AvailableArtifacts.Count);
+            collectionId, collection.Artifacts.Count);
 
-        if (collection.AvailableArtifacts.Count > 0)
+        if (collection.Artifacts.Count > 0)
         {
             _logger.LogInformation("Available artifacts in {CollectionId}: {Artifacts}",
-                collectionId, string.Join(", ", collection.AvailableArtifacts.Select(a => a.Name)));
+                collectionId, string.Join(", ", collection.Artifacts.Select(a => a.Name)));
         }
 
         if (!string.IsNullOrEmpty(artifactName))
@@ -37,7 +37,7 @@ public partial class HuggingFaceDownloader
                 return model;
             }
 
-            var artifactList = collection.AvailableArtifacts;
+            var artifactList = collection.Artifacts;
             var matchingArtifact = artifactList.FirstOrDefault(a =>
                 a.Name.Equals(artifactName, StringComparison.OrdinalIgnoreCase));
 
@@ -70,7 +70,7 @@ public partial class HuggingFaceDownloader
                 return model;
             }
 
-            if (collection.AvailableArtifacts.Count == 0)
+            if (collection.Artifacts.Count == 0)
             {
                 _logger.LogWarning("No artifacts found in collection '{CollectionId}', creating placeholder for '{ArtifactName}'",
                     collectionId, artifactName);
@@ -84,12 +84,12 @@ public partial class HuggingFaceDownloader
                     FilePaths = new List<string>()
                 };
 
-                collection.AvailableArtifacts.Add(placeholder);
+                collection.Artifacts.Add(placeholder);
                 model = Utils.ModelFactory.FromCollectionAndArtifact(collection, placeholder);
                 return model;
             }
 
-            var availableArtifacts = string.Join(", ", collection.AvailableArtifacts.Select(a => a.Name));
+            var availableArtifacts = string.Join(", ", collection.Artifacts.Select(a => a.Name));
             throw new ModelNotFoundException(
                 artifactName,
                 $"Artifact '{artifactName}' not found in collection '{collectionId}'. Available artifacts: {availableArtifacts}");
@@ -162,46 +162,17 @@ public partial class HuggingFaceDownloader
     }
 
     /// <summary>
-    /// Gets information about a model collection with actual file sizes
+    /// Gets information about a model collection with actual file sizes (for detailed info)
     /// </summary>
     public async Task<LMCollection> GetCollectionInfoAsync(string collectionId, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Getting collection information for {CollectionId}", collectionId);
+        _logger.LogInformation("Getting detailed collection information for {CollectionId}", collectionId);
 
         try
         {
             var hfModel = await _client.Value.FindModelByRepoIdAsync(collectionId, cancellationToken);
 
-            var collection = new LMCollection
-            {
-                Id = $"hf:{collectionId}",
-                Hub = "hf",
-                CollectionId = collectionId,
-                Name = string.IsNullOrEmpty(collectionId) ? "Unknown Model" : Path.GetFileName(collectionId),
-                Type = HuggingFaceHelper.DetermineModelType(hfModel),
-                DefaultFormat = HuggingFaceHelper.GetModelFormat(hfModel),
-                Version = hfModel.LastModified.ToString("yyyyMMdd"),
-                Description = HuggingFaceHelper.GetModelDescription(hfModel),
-                Publisher = hfModel.Author,
-                Tags = hfModel.Tags.ToList(),
-                Downloads = hfModel.Downloads,
-                Likes = hfModel.Likes,
-                CreatedAt = hfModel.CreatedAt.DateTime,
-                LastModified = hfModel.LastModified.DateTime,
-                License = hfModel.GetStringProperty("license"),
-                Language = hfModel.GetStringProperty("language"),
-                Capabilities = new LMModelCapabilities
-                {
-                    SupportsTextGeneration = HuggingFaceHelper.DetermineModelType(hfModel) == ModelType.TextGeneration,
-                    SupportsEmbeddings = HuggingFaceHelper.DetermineModelType(hfModel) == ModelType.Embedding,
-                    SupportsImageUnderstanding = hfModel.Tags.Any(t =>
-                        t.Contains("vision") || t.Contains("image") || t.Contains("multimodal")),
-                    MaxContextLength = HuggingFaceHelper.GetMaxContextLength(hfModel),
-                    EmbeddingDimension = HuggingFaceHelper.GetEmbeddingDimension(hfModel)
-                }
-            };
-
-            // Get actual file sizes from repository
+            // Get actual file sizes from repository for detailed info
             Dictionary<string, long>? repositoryFileSizes = null;
             try
             {
@@ -211,77 +182,15 @@ public partial class HuggingFaceDownloader
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to get repository file sizes for {CollectionId}, will use sibling info", collectionId);
+                _logger.LogWarning(ex, "Failed to get repository file sizes for {CollectionId}, will proceed without sizes", collectionId);
             }
 
-            List<string> files = new List<string>();
-            try
-            {
-                var fileInfos = await _client.Value.GetRepositoryFilesAsync(collectionId, null, cancellationToken);
+            // Create detailed collection with file sizes
+            var collection = await HuggingFaceHelper.CreateDetailedCollectionAsync(
+                hfModel, repositoryFileSizes, _logger, cancellationToken);
 
-                foreach (var fileInfo in fileInfos)
-                {
-                    if (fileInfo.IsFile)
-                    {
-                        files.Add(fileInfo.Path);
-                    }
-                }
-
-                _logger.LogInformation("Retrieved {Count} files from collection {CollectionId} using API",
-                    files.Count, collectionId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to get collection files for {CollectionId} using API. Will try using siblings info.", collectionId);
-                files = new List<string>();
-            }
-
-            if (files.Count == 0 && hfModel.Siblings != null && hfModel.Siblings.Count > 0)
-            {
-                _logger.LogInformation("Using siblings information to extract files for {CollectionId}", collectionId);
-
-                foreach (var sibling in hfModel.Siblings)
-                {
-                    if (!string.IsNullOrEmpty(sibling.Filename))
-                    {
-                        files.Add(sibling.Filename);
-                    }
-                }
-
-                _logger.LogInformation("Retrieved {Count} files from siblings info for {CollectionId}",
-                    files.Count, collectionId);
-            }
-
-            files = files.Where(f => !string.IsNullOrWhiteSpace(f)).ToList();
-
-            // Extract artifacts with actual file sizes
-            collection.AvailableArtifacts = await HuggingFaceHelper.ExtractArtifactsAsync(
-                files, collection.DefaultFormat, repositoryFileSizes);
-
-            _logger.LogInformation("Extracted {Count} artifacts from {Files} files for {CollectionId}",
-                collection.AvailableArtifacts.Count, files.Count, collectionId);
-
-            if (collection.AvailableArtifacts.Count == 0 && hfModel.Siblings != null && hfModel.Siblings.Count > 0)
-            {
-                _logger.LogInformation("Creating artifacts directly from siblings for {CollectionId}", collectionId);
-                collection.AvailableArtifacts = HuggingFaceHelper.ExtractArtifactsFromSiblings(hfModel.Siblings, collection.DefaultFormat);
-
-                _logger.LogInformation("Created {Count} artifacts directly from siblings for {CollectionId}",
-                    collection.AvailableArtifacts.Count, collectionId);
-            }
-
-            if (collection.AvailableArtifacts.Count == 0)
-            {
-                _logger.LogWarning("No artifacts found for {CollectionId}, creating placeholder artifact", collectionId);
-                collection.AvailableArtifacts.Add(new ModelArtifact
-                {
-                    Name = Path.GetFileName(collectionId),
-                    Format = collection.DefaultFormat,
-                    Description = $"Default {collection.DefaultFormat} model",
-                    SizeInBytes = 0,
-                    FilePaths = new List<string>()
-                });
-            }
+            _logger.LogInformation("Created detailed collection {CollectionId} with {Count} artifacts",
+                collectionId, collection.Artifacts.Count);
 
             return collection;
         }
@@ -293,7 +202,7 @@ public partial class HuggingFaceDownloader
     }
 
     /// <summary>
-    /// Discovers model collections in Hugging Face with accurate size information
+    /// Discovers model collections in Hugging Face with fast loading (no file sizes)
     /// </summary>
     public async Task<IReadOnlyList<LMCollection>> DiscoverCollectionsAsync(
         ModelType? type = null,
@@ -333,54 +242,26 @@ public partial class HuggingFaceDownloader
             }
 
             var collections = new List<LMCollection>();
+
+            // Process models without file size information for fast discovery
             foreach (var hfModel in results)
             {
                 try
                 {
-                    var collectionId = hfModel.ModelId;
-                    var modelType = HuggingFaceHelper.DetermineModelType(hfModel);
-                    var format = HuggingFaceHelper.GetModelFormat(hfModel);
-
-                    var collection = new LMCollection
-                    {
-                        Id = $"hf:{collectionId}",
-                        Hub = "hf",
-                        CollectionId = collectionId,
-                        Name = string.IsNullOrEmpty(collectionId) ?
-                            "Unknown Model" : Path.GetFileName(collectionId),
-                        Type = modelType,
-                        DefaultFormat = format,
-                        Version = hfModel.LastModified.ToString("yyyyMMdd"),
-                        Description = HuggingFaceHelper.GetModelDescription(hfModel),
-                        Publisher = hfModel.Author,
-                        Tags = hfModel.Tags.ToList(),
-                        Downloads = hfModel.Downloads,
-                        Likes = hfModel.Likes,
-                        CreatedAt = hfModel.CreatedAt.DateTime,
-                        LastModified = hfModel.LastModified.DateTime,
-                        License = hfModel.GetStringProperty("license"),
-                        Language = hfModel.GetStringProperty("language"),
-                        Capabilities = new LMModelCapabilities
-                        {
-                            SupportsTextGeneration = modelType == ModelType.TextGeneration,
-                            SupportsEmbeddings = modelType == ModelType.Embedding,
-                            SupportsImageUnderstanding = hfModel.Tags.Any(t =>
-                                t.Contains("vision") || t.Contains("image") || t.Contains("multimodal")),
-                            MaxContextLength = HuggingFaceHelper.GetMaxContextLength(hfModel),
-                            EmbeddingDimension = HuggingFaceHelper.GetEmbeddingDimension(hfModel)
-                        }
-                    };
-
-                    PopulateCollectionArtifactsWithActualSizes(collection, hfModel);
-
+                    // Create lightweight collection without file sizes
+                    var collection = HuggingFaceHelper.CreateLightweightCollection(hfModel);
                     collections.Add(collection);
+
+                    _logger.LogDebug("Created lightweight collection {CollectionId} with {Count} artifacts",
+                        collection.CollectionId, collection.Artifacts.Count);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to convert model {ModelId} to collection", hfModel.ModelId);
+                    _logger.LogWarning(ex, "Failed to convert model {ModelId} to lightweight collection", hfModel.ModelId);
                 }
             }
 
+            _logger.LogInformation("Discovered {Count} collections in fast mode", collections.Count);
             return collections;
         }
         catch (Exception ex)
@@ -388,141 +269,5 @@ public partial class HuggingFaceDownloader
             _logger.LogError(ex, "Error discovering collections");
             throw new ModelHubException($"Failed to discover collections: {ex.Message}", ex);
         }
-    }
-
-    /// <summary>
-    /// Populates collection artifacts with actual file sizes from siblings
-    /// </summary>
-    private static void PopulateCollectionArtifactsWithActualSizes(LMCollection collection, HuggingFaceModel hfModel)
-    {
-        if (hfModel.Siblings != null && hfModel.Siblings.Any())
-        {
-            var modelFiles = hfModel.Siblings
-                .Where(s => !string.IsNullOrEmpty(s.Filename) &&
-                          (s.Filename.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase) ||
-                           s.Filename.EndsWith(".safetensors", StringComparison.OrdinalIgnoreCase) ||
-                           s.Filename.EndsWith(".bin", StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-
-            if (modelFiles.Any())
-            {
-                foreach (var file in modelFiles)
-                {
-                    var artifactName = Path.GetFileNameWithoutExtension(file.Filename);
-                    var artifactFormat = Path.GetExtension(file.Filename).TrimStart('.');
-
-                    int? quantBits = null;
-                    string? sizeCategory = null;
-
-                    var quantMatch = System.Text.RegularExpressions.Regex.Match(
-                        artifactName, @"Q(\d+)(_[KM])?(_S|_M|_L|_XL)?");
-                    if (quantMatch.Success)
-                    {
-                        quantBits = int.Parse(quantMatch.Groups[1].Value);
-                    }
-
-                    var sizeMatch = System.Text.RegularExpressions.Regex.Match(
-                        artifactName, @"(_XS|_S|_M|_L|_XL|-xs|-small|-medium|-large|-xl)$");
-                    if (sizeMatch.Success)
-                    {
-                        sizeCategory = GetNormalizedSizeCategory(sizeMatch.Groups[1].Value);
-                    }
-
-                    var artifact = new ModelArtifact
-                    {
-                        Name = artifactName,
-                        Format = artifactFormat,
-                        Description = GetArtifactDescription(artifactName, artifactFormat),
-                        SizeInBytes = 0,
-                        FilePaths = new List<string> { file.Filename },
-                        QuantizationBits = quantBits,
-                        SizeCategory = sizeCategory
-                    };
-
-                    collection.AvailableArtifacts.Add(artifact);
-                }
-            }
-            else
-            {
-                AddPlaceholderArtifact(collection, hfModel);
-            }
-        }
-        else
-        {
-            AddPlaceholderArtifact(collection, hfModel);
-        }
-    }
-
-    /// <summary>
-    /// Adds a placeholder artifact when no specific artifacts are found
-    /// </summary>
-    private static void AddPlaceholderArtifact(LMCollection collection, HuggingFaceModel hfModel)
-    {
-        var defaultFormat = HuggingFaceHelper.GetModelFormat(hfModel);
-        var artifactName = hfModel.ModelId.Split('/').Last();
-
-        var placeholderArtifact = new ModelArtifact
-        {
-            Name = artifactName,
-            Format = defaultFormat,
-            Description = $"Default {defaultFormat} model in this collection",
-            SizeInBytes = 0,
-            FilePaths = new List<string>()
-        };
-
-        collection.AvailableArtifacts.Add(placeholderArtifact);
-    }
-
-    /// <summary>
-    /// Generates a description for an artifact based on its name and format
-    /// </summary>
-    private static string GetArtifactDescription(string artifactName, string format)
-    {
-        var parts = new List<string>();
-
-        parts.Add($"{format.ToUpperInvariant()} format");
-
-        if (artifactName.Contains("Q2") || artifactName.Contains("Q3") ||
-            artifactName.Contains("Q4") || artifactName.Contains("Q5") ||
-            artifactName.Contains("Q6") || artifactName.Contains("Q8"))
-        {
-            var quantMatch = System.Text.RegularExpressions.Regex.Match(
-                artifactName, @"Q(\d+)(_[KM])?(_S|_M|_L|_XL)?");
-            if (quantMatch.Success)
-            {
-                parts.Add($"Q{quantMatch.Groups[1].Value} quantization");
-            }
-        }
-
-        var sizeMatch = System.Text.RegularExpressions.Regex.Match(
-            artifactName, @"(_XS|_S|_M|_L|_XL|-xs|-small|-medium|-large|-xl)$");
-        if (sizeMatch.Success)
-        {
-            var sizeCategory = GetNormalizedSizeCategory(sizeMatch.Groups[1].Value);
-            parts.Add($"{sizeCategory} size");
-        }
-
-        return string.Join(", ", parts);
-    }
-
-    /// <summary>
-    /// Normalizes size category string to standard form
-    /// </summary>
-    private static string GetNormalizedSizeCategory(string sizeCategory)
-    {
-        var normalized = sizeCategory.ToUpperInvariant();
-
-        if (normalized.Contains("XS") || normalized == "-XS")
-            return "Extra Small";
-        if (normalized.Contains("S") || normalized == "-SMALL")
-            return "Small";
-        if (normalized.Contains("M") || normalized == "-MEDIUM")
-            return "Medium";
-        if (normalized.Contains("L") && !normalized.Contains("XL") || normalized == "-LARGE")
-            return "Large";
-        if (normalized.Contains("XL") || normalized == "-XL")
-            return "Extra Large";
-
-        return "Unknown Size";
     }
 }

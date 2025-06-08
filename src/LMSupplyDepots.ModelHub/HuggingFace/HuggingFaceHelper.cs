@@ -206,6 +206,250 @@ public static class HuggingFaceHelper
     }
 
     /// <summary>
+    /// Creates a lightweight collection for discovery (without file sizes)
+    /// </summary>
+    public static LMCollection CreateLightweightCollection(HuggingFaceModel hfModel)
+    {
+        var modelType = DetermineModelType(hfModel);
+        var format = GetModelFormat(hfModel);
+        var collectionId = hfModel.ModelId;
+
+        var collection = new LMCollection
+        {
+            Id = $"hf:{collectionId}",
+            Hub = "hf",
+            CollectionId = collectionId,
+            Name = string.IsNullOrEmpty(collectionId) ? "Unknown Model" : Path.GetFileName(collectionId),
+            Type = modelType,
+            DefaultFormat = format,
+            Version = hfModel.LastModified.ToString("yyyyMMdd"),
+            Description = GetModelDescription(hfModel),
+            Publisher = hfModel.Author,
+            Tags = hfModel.Tags.ToList(),
+            Downloads = hfModel.Downloads,
+            Likes = hfModel.Likes,
+            CreatedAt = hfModel.CreatedAt.DateTime,
+            LastModified = hfModel.LastModified.DateTime,
+            License = hfModel.GetStringProperty("license"),
+            Language = hfModel.GetStringProperty("language"),
+            Capabilities = new LMModelCapabilities
+            {
+                SupportsTextGeneration = modelType == ModelType.TextGeneration,
+                SupportsEmbeddings = modelType == ModelType.Embedding,
+                SupportsImageUnderstanding = hfModel.Tags.Any(t =>
+                    t.Contains("vision") || t.Contains("image") || t.Contains("multimodal")),
+                MaxContextLength = GetMaxContextLength(hfModel),
+                EmbeddingDimension = GetEmbeddingDimension(hfModel)
+            }
+        };
+
+        // Extract basic artifacts without file sizes for fast discovery
+        collection.Artifacts = ExtractBasicArtifactsFromSiblings(hfModel.Siblings, format);
+
+        if (collection.Artifacts.Count == 0)
+        {
+            collection.Artifacts.Add(new ModelArtifact
+            {
+                Name = Path.GetFileName(collectionId),
+                Format = format,
+                Description = $"Default {format} model",
+                SizeInBytes = 0,
+                FilePaths = new List<string>()
+            });
+        }
+
+        return collection;
+    }
+
+    /// <summary>
+    /// Creates a detailed collection with file sizes for info endpoint
+    /// </summary>
+    public static async Task<LMCollection> CreateDetailedCollectionAsync(
+        HuggingFaceModel hfModel,
+        Dictionary<string, long>? repositoryFileSizes,
+        ILogger? logger = null,
+        CancellationToken cancellationToken = default)
+    {
+        var modelType = DetermineModelType(hfModel);
+        var format = GetModelFormat(hfModel);
+        var collectionId = hfModel.ModelId;
+
+        var collection = new LMCollection
+        {
+            Id = $"hf:{collectionId}",
+            Hub = "hf",
+            CollectionId = collectionId,
+            Name = string.IsNullOrEmpty(collectionId) ? "Unknown Model" : Path.GetFileName(collectionId),
+            Type = modelType,
+            DefaultFormat = format,
+            Version = hfModel.LastModified.ToString("yyyyMMdd"),
+            Description = GetModelDescription(hfModel),
+            Publisher = hfModel.Author,
+            Tags = hfModel.Tags.ToList(),
+            Downloads = hfModel.Downloads,
+            Likes = hfModel.Likes,
+            CreatedAt = hfModel.CreatedAt.DateTime,
+            LastModified = hfModel.LastModified.DateTime,
+            License = hfModel.GetStringProperty("license"),
+            Language = hfModel.GetStringProperty("language"),
+            Capabilities = new LMModelCapabilities
+            {
+                SupportsTextGeneration = modelType == ModelType.TextGeneration,
+                SupportsEmbeddings = modelType == ModelType.Embedding,
+                SupportsImageUnderstanding = hfModel.Tags.Any(t =>
+                    t.Contains("vision") || t.Contains("image") || t.Contains("multimodal")),
+                MaxContextLength = GetMaxContextLength(hfModel),
+                EmbeddingDimension = GetEmbeddingDimension(hfModel)
+            }
+        };
+
+        // Extract detailed artifacts with file sizes
+        collection.Artifacts = await ExtractDetailedArtifactsFromModelAsync(
+            hfModel, repositoryFileSizes, logger, cancellationToken);
+
+        if (collection.Artifacts.Count == 0)
+        {
+            collection.Artifacts.Add(new ModelArtifact
+            {
+                Name = Path.GetFileName(collectionId),
+                Format = format,
+                Description = $"Default {format} model",
+                SizeInBytes = 0,
+                FilePaths = new List<string>()
+            });
+        }
+
+        return collection;
+    }
+
+    /// <summary>
+    /// Extracts basic artifact information without file sizes for fast discovery
+    /// </summary>
+    public static List<ModelArtifact> ExtractBasicArtifactsFromSiblings(List<Sibling> siblings, string defaultFormat)
+    {
+        var artifacts = new List<ModelArtifact>();
+
+        if (siblings == null || siblings.Count == 0)
+        {
+            return artifacts;
+        }
+
+        var modelFiles = siblings
+            .Where(s => !string.IsNullOrEmpty(s.Filename) && IsModelFile(s.Filename))
+            .ToList();
+
+        if (modelFiles.Count == 0)
+        {
+            return artifacts;
+        }
+
+        // Group files by artifact name (handle split files)
+        var fileGroups = GroupFilesByArtifact(modelFiles);
+
+        foreach (var group in fileGroups)
+        {
+            var artifactName = group.Key;
+            var files = group.Value;
+            var firstFile = files.First();
+
+            var format = Path.GetExtension(firstFile.Filename).TrimStart('.').ToLowerInvariant();
+            var (quantBits, sizeCategory) = ParseArtifactInfo(artifactName);
+
+            var artifact = new ModelArtifact
+            {
+                Name = artifactName,
+                Format = format,
+                FilePaths = files.Select(f => f.Filename).ToList(),
+                Description = GetArtifactDescription(artifactName, format, files.Count > 1),
+                QuantizationBits = quantBits,
+                SizeCategory = sizeCategory,
+                SizeInBytes = 0 // No size info for fast discovery
+            };
+
+            artifacts.Add(artifact);
+        }
+
+        return artifacts.OrderBy(a => a.Name).ToList();
+    }
+
+    /// <summary>
+    /// Extracts artifacts from a HuggingFace model with actual file sizes for detailed info
+    /// </summary>
+    public static async Task<List<ModelArtifact>> ExtractDetailedArtifactsFromModelAsync(
+        HuggingFaceModel hfModel,
+        Dictionary<string, long>? repositoryFileSizes,
+        ILogger? logger = null,
+        CancellationToken cancellationToken = default)
+    {
+        var artifacts = new List<ModelArtifact>();
+
+        if (hfModel.Siblings == null || hfModel.Siblings.Count == 0)
+        {
+            logger?.LogWarning("No siblings found for model {ModelId}", hfModel.ModelId);
+            return artifacts;
+        }
+
+        // Get all model files from siblings
+        var modelFiles = hfModel.Siblings
+            .Where(s => !string.IsNullOrEmpty(s.Filename) && IsModelFile(s.Filename))
+            .ToList();
+
+        if (modelFiles.Count == 0)
+        {
+            logger?.LogWarning("No model files found in siblings for {ModelId}", hfModel.ModelId);
+            return artifacts;
+        }
+
+        logger?.LogDebug("Found {Count} model files for {ModelId}", modelFiles.Count, hfModel.ModelId);
+
+        // Group files by artifact name (handle split files)
+        var fileGroups = GroupFilesByArtifact(modelFiles);
+
+        foreach (var group in fileGroups)
+        {
+            var artifactName = group.Key;
+            var files = group.Value;
+            var firstFile = files.First();
+
+            var format = Path.GetExtension(firstFile.Filename).TrimStart('.').ToLowerInvariant();
+            var (quantBits, sizeCategory) = ParseArtifactInfo(artifactName);
+
+            // Calculate total size for this artifact
+            long totalSize = 0;
+            var filePaths = new List<string>();
+
+            foreach (var file in files)
+            {
+                filePaths.Add(file.Filename);
+
+                // Get actual file size from repository if available
+                if (repositoryFileSizes != null && repositoryFileSizes.TryGetValue(file.Filename, out var fileSize))
+                {
+                    totalSize += fileSize;
+                }
+            }
+
+            var artifact = new ModelArtifact
+            {
+                Name = artifactName,
+                Format = format,
+                FilePaths = filePaths,
+                Description = GetArtifactDescription(artifactName, format, files.Count > 1),
+                QuantizationBits = quantBits,
+                SizeCategory = sizeCategory,
+                SizeInBytes = totalSize
+            };
+
+            artifacts.Add(artifact);
+
+            logger?.LogDebug("Created artifact {ArtifactName} with {FileCount} files, total size: {TotalSize} bytes",
+                artifactName, files.Count, totalSize);
+        }
+
+        return artifacts.OrderBy(a => a.Name).ToList();
+    }
+
+    /// <summary>
     /// Extracts artifact information from repository files with actual sizes
     /// </summary>
     public static async Task<List<ModelArtifact>> ExtractArtifactsAsync(
@@ -427,6 +671,135 @@ public static class HuggingFaceHelper
         return artifacts;
     }
 
+    /// <summary>
+    /// Groups files by artifact name, handling split files
+    /// </summary>
+    private static Dictionary<string, List<Sibling>> GroupFilesByArtifact(List<Sibling> modelFiles)
+    {
+        var groups = new Dictionary<string, List<Sibling>>();
+
+        foreach (var file in modelFiles)
+        {
+            var fileName = Path.GetFileNameWithoutExtension(file.Filename);
+
+            // Check if this is a split file (e.g., "model-00001-of-00005")
+            var multiFileMatch = _multiFileRegex.Match(fileName);
+
+            string artifactName;
+            if (multiFileMatch.Success)
+            {
+                // Split file - use the base name
+                artifactName = multiFileMatch.Groups[1].Value;
+            }
+            else
+            {
+                // Single file - use the full name without extension
+                artifactName = fileName;
+            }
+
+            if (!groups.TryGetValue(artifactName, out var group))
+            {
+                group = new List<Sibling>();
+                groups[artifactName] = group;
+            }
+
+            group.Add(file);
+        }
+
+        return groups;
+    }
+
+    /// <summary>
+    /// Determines if a filename represents a model file
+    /// </summary>
+    private static bool IsModelFile(string filename)
+    {
+        var extension = Path.GetExtension(filename).ToLowerInvariant();
+        return extension == ".gguf" ||
+               extension == ".safetensors" ||
+               extension == ".bin" ||
+               extension == ".ggml" ||
+               extension == ".pt" ||
+               extension == ".pth";
+    }
+
+    /// <summary>
+    /// Parses quantization and size information from artifact name
+    /// </summary>
+    private static (int? quantBits, string? sizeCategory) ParseArtifactInfo(string artifactName)
+    {
+        int? quantBits = null;
+        string? sizeCategory = null;
+
+        var quantMatch = _quantizationRegex.Match(artifactName);
+        if (quantMatch.Success)
+        {
+            quantBits = int.Parse(quantMatch.Groups[1].Value);
+        }
+
+        var sizeMatch = _sizeCategoryRegex.Match(artifactName);
+        if (sizeMatch.Success)
+        {
+            sizeCategory = GetNormalizedSizeCategory(sizeMatch.Groups[1].Value);
+        }
+
+        return (quantBits, sizeCategory);
+    }
+
+    /// <summary>
+    /// Generates description for an artifact
+    /// </summary>
+    private static string GetArtifactDescription(string artifactName, string format, bool isMultiFile = false)
+    {
+        var parts = new List<string>();
+
+        parts.Add($"{format.ToUpperInvariant()} format");
+
+        if (artifactName.Contains("Q", StringComparison.OrdinalIgnoreCase))
+        {
+            var quantMatch = _quantizationRegex.Match(artifactName);
+            if (quantMatch.Success)
+            {
+                parts.Add($"Q{quantMatch.Groups[1].Value} quantization");
+            }
+        }
+
+        var sizeMatch = _sizeCategoryRegex.Match(artifactName);
+        if (sizeMatch.Success)
+        {
+            var sizeCategory = GetNormalizedSizeCategory(sizeMatch.Groups[1].Value);
+            parts.Add($"{sizeCategory} size");
+        }
+
+        if (isMultiFile)
+        {
+            parts.Add("Multiple files");
+        }
+
+        return string.Join(", ", parts);
+    }
+
+    /// <summary>
+    /// Normalizes size category string
+    /// </summary>
+    private static string GetNormalizedSizeCategory(string sizeCategory)
+    {
+        var normalized = sizeCategory.ToUpperInvariant();
+
+        if (normalized.Contains("XS") || normalized == "-XS")
+            return "Extra Small";
+        if (normalized.Contains("S") || normalized == "-SMALL")
+            return "Small";
+        if (normalized.Contains("M") || normalized == "-MEDIUM")
+            return "Medium";
+        if (normalized.Contains("L") && !normalized.Contains("XL") || normalized == "-LARGE")
+            return "Large";
+        if (normalized.Contains("XL") || normalized == "-XL")
+            return "Extra Large";
+
+        return "Unknown Size";
+    }
+
     private static void ProcessGgufFiles(List<Sibling> ggufFiles, List<ModelArtifact> artifacts)
     {
         foreach (var sibling in ggufFiles)
@@ -551,74 +924,6 @@ public static class HuggingFaceHelper
         }
     }
 
-    private static (int? quantBits, string? sizeCategory) ParseArtifactInfo(string artifactName)
-    {
-        int? quantBits = null;
-        string? sizeCategory = null;
-
-        var quantMatch = _quantizationRegex.Match(artifactName);
-        if (quantMatch.Success)
-        {
-            quantBits = int.Parse(quantMatch.Groups[1].Value);
-        }
-
-        var sizeMatch = _sizeCategoryRegex.Match(artifactName);
-        if (sizeMatch.Success)
-        {
-            sizeCategory = GetNormalizedSizeCategory(sizeMatch.Groups[1].Value);
-        }
-
-        return (quantBits, sizeCategory);
-    }
-
-    private static string GetArtifactDescription(string artifactName, string format, bool isMultiFile = false)
-    {
-        var parts = new List<string>();
-
-        parts.Add($"{format.ToUpperInvariant()} format");
-
-        if (artifactName.Contains("Q4") || artifactName.Contains("Q5") || artifactName.Contains("Q8"))
-        {
-            var quantMatch = _quantizationRegex.Match(artifactName);
-            if (quantMatch.Success)
-            {
-                parts.Add($"Q{quantMatch.Groups[1].Value} quantization");
-            }
-        }
-
-        var sizeMatch = _sizeCategoryRegex.Match(artifactName);
-        if (sizeMatch.Success)
-        {
-            var sizeCategory = GetNormalizedSizeCategory(sizeMatch.Groups[1].Value);
-            parts.Add($"{sizeCategory} size");
-        }
-
-        if (isMultiFile)
-        {
-            parts.Add("Multiple files");
-        }
-
-        return string.Join(", ", parts);
-    }
-
-    private static string GetNormalizedSizeCategory(string sizeCategory)
-    {
-        var normalized = sizeCategory.ToUpperInvariant();
-
-        if (normalized.Contains("XS") || normalized == "-XS")
-            return "Extra Small";
-        if (normalized.Contains("S") || normalized == "-SMALL")
-            return "Small";
-        if (normalized.Contains("M") || normalized == "-MEDIUM")
-            return "Medium";
-        if (normalized.Contains("L") && !normalized.Contains("XL") || normalized == "-LARGE")
-            return "Large";
-        if (normalized.Contains("XL") || normalized == "-XL")
-            return "Extra Large";
-
-        return "Unknown Size";
-    }
-
     private static bool IsModelFileExtension(string extension)
     {
         if (string.IsNullOrEmpty(extension))
@@ -633,14 +938,13 @@ public static class HuggingFaceHelper
                extension == ".pth";
     }
 
-    private static bool IsModelFile(string filename)
+    // Keep existing method as alias for backward compatibility
+    public static async Task<List<ModelArtifact>> ExtractArtifactsFromModelAsync(
+        HuggingFaceModel hfModel,
+        Dictionary<string, long>? repositoryFileSizes,
+        ILogger? logger = null,
+        CancellationToken cancellationToken = default)
     {
-        var extension = Path.GetExtension(filename).ToLowerInvariant();
-        return extension == ".gguf" ||
-               extension == ".safetensors" ||
-               extension == ".bin" ||
-               extension == ".ggml" ||
-               extension == ".pt" ||
-               extension == ".pth";
+        return await ExtractDetailedArtifactsFromModelAsync(hfModel, repositoryFileSizes, logger, cancellationToken);
     }
 }

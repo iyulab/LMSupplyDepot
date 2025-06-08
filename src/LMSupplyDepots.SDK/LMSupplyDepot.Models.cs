@@ -112,17 +112,6 @@ public partial class LMSupplyDepot
         return ModelManager.GetCollectionInfoAsync(collectionKey, cancellationToken);
     }
 
-    /// <summary>
-    /// Gets all models from a collection
-    /// </summary>
-    public async Task<IReadOnlyList<LMModel>> GetCollectionModelsAsync(
-        string collectionKey,
-        CancellationToken cancellationToken = default)
-    {
-        var collection = await ModelManager.GetCollectionInfoAsync(collectionKey, cancellationToken);
-        return collection.GetAllModels();
-    }
-
     #endregion
 
     /// <summary>

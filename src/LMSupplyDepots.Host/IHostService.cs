@@ -29,8 +29,6 @@ public interface IHostService
 
     Task<LMCollection> GetCollectionInfoAsync(string collectionId, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<LMModel>> GetCollectionModelsAsync(string collectionId, CancellationToken cancellationToken = default);
-
     #endregion
 
     #region Model Download Management

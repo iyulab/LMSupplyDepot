@@ -1,6 +1,10 @@
+global using Microsoft.Extensions.Logging;
 global using Microsoft.Extensions.DependencyInjection;
+global using LMSupplyDepots.Exceptions;
+global using LMSupplyDepots.Interfaces;
 global using LMSupplyDepots.Models;
+global using LMSupplyDepots.ModelHub;
+global using LMSupplyDepots.ModelHub.Utils;
 global using LMSupplyDepots.ModelHub.Models;
 global using LMSupplyDepots.ModelHub.Interfaces;
-global using LMSupplyDepots.ModelHub;
 global using LMSupplyDepots.ModelHub.HuggingFace;

@@ -53,7 +53,7 @@ public class LMCollection
     /// <summary>
     /// Available artifacts in this model collection
     /// </summary>
-    public List<ModelArtifact> AvailableArtifacts { get; set; } = new();
+    public List<ModelArtifact> Artifacts { get; set; } = new();
 
     /// <summary>
     /// Common capabilities for all models in this collection
@@ -105,7 +105,7 @@ public class LMCollection
     /// </summary>
     public LMModel? GetModel(string artifactName)
     {
-        var artifact = AvailableArtifacts.FirstOrDefault(a => a.Name == artifactName);
+        var artifact = Artifacts.FirstOrDefault(a => a.Name == artifactName);
         if (artifact == null)
             return null;
 
@@ -117,7 +117,7 @@ public class LMCollection
     /// </summary>
     public IReadOnlyList<LMModel> GetAllModels()
     {
-        return AvailableArtifacts
+        return Artifacts
             .Select(a => Utils.ModelFactory.FromCollectionAndArtifact(this, a))
             .ToList();
     }
@@ -127,10 +127,10 @@ public class LMCollection
     /// </summary>
     public LMModel? GetRecommendedModel()
     {
-        if (AvailableArtifacts.Count == 0)
+        if (Artifacts.Count == 0)
             return null;
 
-        var mediumSizedArtifact = AvailableArtifacts.FirstOrDefault(a =>
+        var mediumSizedArtifact = Artifacts.FirstOrDefault(a =>
             a.SizeCategory == "M" ||
             a.Name.Contains("Q5_K_M") ||
             a.Name.Contains("Q4_K_M") ||
@@ -140,21 +140,21 @@ public class LMCollection
         if (mediumSizedArtifact != null)
             return Utils.ModelFactory.FromCollectionAndArtifact(this, mediumSizedArtifact);
 
-        var q5Artifact = AvailableArtifacts.FirstOrDefault(a =>
+        var q5Artifact = Artifacts.FirstOrDefault(a =>
             a.QuantizationBits == 5 ||
             a.Name.Contains("Q5"));
 
         if (q5Artifact != null)
             return Utils.ModelFactory.FromCollectionAndArtifact(this, q5Artifact);
 
-        var q4Artifact = AvailableArtifacts.FirstOrDefault(a =>
+        var q4Artifact = Artifacts.FirstOrDefault(a =>
             a.QuantizationBits == 4 ||
             a.Name.Contains("Q4"));
 
         if (q4Artifact != null)
             return Utils.ModelFactory.FromCollectionAndArtifact(this, q4Artifact);
 
-        return Utils.ModelFactory.FromCollectionAndArtifact(this, AvailableArtifacts[0]);
+        return Utils.ModelFactory.FromCollectionAndArtifact(this, Artifacts[0]);
     }
 
     /// <summary>
@@ -174,7 +174,7 @@ public class LMCollection
             Description = Description,
             Publisher = Publisher,
             Capabilities = Capabilities.Clone(),
-            AvailableArtifacts = AvailableArtifacts.Select(a => a.Clone()).ToList(),
+            Artifacts = Artifacts.Select(a => a.Clone()).ToList(),
             Tags = new List<string>(Tags),
             Downloads = Downloads,
             Likes = Likes,

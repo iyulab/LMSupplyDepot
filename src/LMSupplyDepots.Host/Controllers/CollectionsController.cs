@@ -72,29 +72,4 @@ public class CollectionsController : ControllerBase
             return StatusCode(500, new ErrorResponse { Error = ex.Message });
         }
     }
-
-    /// <summary>
-    /// Gets all available models (artifacts) from a collection
-    /// </summary>
-    [HttpGet("models")]
-    public async Task<ActionResult<IReadOnlyList<LMModel>>> GetCollectionModels(
-        [FromQuery] string collectionId,
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrEmpty(collectionId))
-        {
-            return BadRequest(new ErrorResponse { Error = "Collection ID is required" });
-        }
-
-        try
-        {
-            var models = await _hostService.GetCollectionModelsAsync(collectionId, cancellationToken);
-            return Ok(models);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting models for collection {CollectionId}", collectionId);
-            return StatusCode(500, new ErrorResponse { Error = ex.Message });
-        }
-    }
 }

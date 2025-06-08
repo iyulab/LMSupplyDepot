@@ -19,7 +19,7 @@ public class ModelsController : ControllerBase
     }
 
     /// <summary>
-    /// Lists available local models
+    /// Lists available local models (IsLoaded property is automatically included)
     /// </summary>
     [HttpGet("models")]
     public async Task<ActionResult<LMModel[]>> ListModels(
@@ -46,7 +46,7 @@ public class ModelsController : ControllerBase
     }
 
     /// <summary>
-    /// Shows details of a specific model
+    /// Shows details of a specific model (IsLoaded property is automatically included)
     /// </summary>
     [HttpPost("show")]
     public async Task<ActionResult<LMModel>> ShowModel([FromBody] ModelNameRequest request, CancellationToken cancellationToken = default)
@@ -74,7 +74,7 @@ public class ModelsController : ControllerBase
     }
 
     /// <summary>
-    /// Gets a model by alias
+    /// Gets a model by alias (IsLoaded property is automatically included)
     /// </summary>
     [HttpGet("models/alias")]
     public async Task<ActionResult<LMModel>> GetModelByAlias(
@@ -124,6 +124,31 @@ public class ModelsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error checking if model {Model} is downloaded", model);
+            return StatusCode(500, new ErrorResponse { Error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Checks if a model is loaded
+    /// </summary>
+    [HttpGet("models/loaded")]
+    public async Task<ActionResult<bool>> IsModelLoaded(
+        [FromQuery] string model,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(model))
+        {
+            return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
+        }
+
+        try
+        {
+            var isLoaded = await _hostService.IsModelLoadedAsync(model, cancellationToken);
+            return Ok(isLoaded);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking if model {Model} is loaded", model);
             return StatusCode(500, new ErrorResponse { Error = ex.Message });
         }
     }

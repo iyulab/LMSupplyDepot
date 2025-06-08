@@ -74,11 +74,6 @@ public class HostService : IHostService, IAsyncDisposable
         return _depot.GetCollectionInfoAsync(collectionId, cancellationToken);
     }
 
-    public Task<IReadOnlyList<LMModel>> GetCollectionModelsAsync(string collectionId, CancellationToken cancellationToken = default)
-    {
-        return _depot.GetCollectionModelsAsync(collectionId, cancellationToken);
-    }
-
     #endregion
 
     #region Model Download Management

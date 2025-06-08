@@ -1,10 +1,4 @@
-﻿using LMSupplyDepots.Exceptions;
 using LMSupplyDepots.Inference.Services;
-using LMSupplyDepots.Interfaces;
-using LMSupplyDepots.Models;
-using LMSupplyDepots.ModelHub.Utils;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace LMSupplyDepots.SDK;
 
@@ -19,7 +13,12 @@ public partial class LMSupplyDepot
     private IModelLoader ModelLoader => _serviceProvider.GetRequiredService<IModelLoader>();
 
     /// <summary>
-    /// Loads a model into memory
+    /// Gets the repository model loader service for direct access to load state management
+    /// </summary>
+    private RepositoryModelLoaderService RepositoryModelLoader => _serviceProvider.GetRequiredService<RepositoryModelLoaderService>();
+
+    /// <summary>
+    /// Loads a model into memory and updates its load state
     /// </summary>
     public async Task<LMModel> LoadModelAsync(
         string modelKey,
@@ -61,9 +60,9 @@ public partial class LMSupplyDepot
             Dictionary<string, object?> loadParams = parameters ?? new Dictionary<string, object?>();
             CheckAndApplyHardwareParameters(loadParams);
 
-            // Load the model
+            // Load the model (this will automatically update the load state)
             var loadedModel = await ModelLoader.LoadModelAsync(modelId, loadParams, cancellationToken);
-            _logger.LogInformation("Model {ModelId} loaded successfully", modelId);
+            _logger.LogInformation("Model {ModelId} loaded successfully at {LoadedAt}", modelId, loadedModel.LoadedAt);
 
             return loadedModel;
         }
@@ -90,7 +89,7 @@ public partial class LMSupplyDepot
     }
 
     /// <summary>
-    /// Unloads a model from memory
+    /// Unloads a model from memory and updates its load state
     /// </summary>
     public async Task UnloadModelAsync(
         string modelKey,
@@ -115,7 +114,7 @@ public partial class LMSupplyDepot
                 disposableEmbedEngine.Dispose();
             }
 
-            // Unload from model loader
+            // Unload from model loader (this will automatically update the load state)
             await ModelLoader.UnloadModelAsync(modelId, cancellationToken);
 
             _logger.LogInformation("Model {ModelId} unloaded successfully", modelId);
@@ -138,7 +137,7 @@ public partial class LMSupplyDepot
     }
 
     /// <summary>
-    /// Checks if a model is loaded
+    /// Checks if a model is loaded (now uses the built-in IsLoaded property)
     /// </summary>
     public async Task<bool> IsModelLoadedAsync(
         string modelKey,
@@ -149,12 +148,27 @@ public partial class LMSupplyDepot
     }
 
     /// <summary>
-    /// Gets a list of loaded models
+    /// Gets a list of loaded models (now returns models with IsLoaded = true)
     /// </summary>
     public Task<IReadOnlyList<LMModel>> GetLoadedModelsAsync(
         CancellationToken cancellationToken = default)
     {
         return ModelLoader.GetLoadedModelsAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Updates the load state of a model (for internal use by inference engines)
+    /// </summary>
+    internal async Task UpdateModelLoadStateAsync(string modelId, bool isLoaded, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await RepositoryModelLoader.UpdateModelLoadStateAsync(modelId, isLoaded, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to update load state for model {ModelId}", modelId);
+        }
     }
 
     /// <summary>
@@ -232,6 +246,25 @@ public partial class LMSupplyDepot
     private void ConfigureModelLoaderServices(IServiceCollection services)
     {
         // Register the RepositoryModelLoaderService that uses the already registered IModelRepository
-        services.AddSingleton<IModelLoader, RepositoryModelLoaderService>();
+        services.AddSingleton<RepositoryModelLoaderService>();
+        services.AddSingleton<IModelLoader>(sp => sp.GetRequiredService<RepositoryModelLoaderService>());
+    }
+
+    /// <summary>
+    /// Initializes the model loader and synchronizes load states
+    /// </summary>
+    private async Task InitializeModelLoaderAsync()
+    {
+        try
+        {
+            _logger.LogInformation("Initializing model loader and synchronizing load states");
+            await RepositoryModelLoader.InitializeAsync(CancellationToken.None);
+            _logger.LogInformation("Model loader initialization completed");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to initialize model loader");
+            // Don't throw here as this is initialization - the SDK should still be usable
+        }
     }
 }

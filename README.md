@@ -3,18 +3,8 @@
 [![Build and Release](https://github.com/iyulab/LMSupplyDepot/actions/workflows/hostapp.yml/badge.svg)](https://github.com/iyulab/LMSupplyDepot/actions/workflows/hostapp.yml)
 [![License](https://img.shields.io/github/license/iyulab/LMSupplyDepot)](https://github.com/iyulab/LMSupplyDepot/blob/main/LICENSE)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/iyulab/LMSupplyDepot)](https://github.com/iyulab/LMSupplyDepot/releases)
-[![GitHub issues](https://img.shields.io/github/issues/iyulab/LMSupplyDepot)](https://github.com/iyulab/LMSupplyDepot/issues)
-[![GitHub pull requests](https://img.shields.io/github/issues-pr/iyulab/LMSupplyDepot)](https://github.com/iyulab/LMSupplyDepot/pulls)
-[![GitHub stars](https://img.shields.io/github/stars/iyulab/LMSupplyDepot)](https://github.com/iyulab/LMSupplyDepot/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/iyulab/LMSupplyDepot)](https://github.com/iyulab/LMSupplyDepot/network)
 
-[![.NET](https://img.shields.io/badge/.NET-8.0+-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
-[![C#](https://img.shields.io/badge/C%23-Latest-239120?logo=csharp)](https://docs.microsoft.com/en-us/dotnet/csharp/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)](https://github.com/iyulab/LMSupplyDepot)
-[![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker)](https://hub.docker.com/)
-
-[![NuGet](https://img.shields.io/nuget/v/LMSupplyDepots.SDK?label=LMSupplyDepots.SDK)](https://www.nuget.org/packages/LMSupplyDepots.SDK/)
-[![NuGet Downloads](https://img.shields.io/nuget/dt/LMSupplyDepots.SDK)](https://www.nuget.org/packages/LMSupplyDepots.SDK/)
 
 LMSupplyDepots는 로컬 환경에서 다양한 오픈소스 LLM을 쉽게 관리하고 실행할 수 있는 플랫폼입니다. 모듈식 아키텍처로 독립적인 컴포넌트 구성을 지원하며, 웹 API와 CLI 인터페이스를 통해 프라이버시를 유지하면서 강력한 AI 기능을 로컬에서 활용할 수 있습니다.
 

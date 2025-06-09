@@ -10,4 +10,7 @@
     <ProjectReference Include="..\LMSupplyDepots.Host\LMSupplyDepots.Host.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Remove="appsettings.Development.json" Condition="'$(Configuration)' != 'Debug'" />
+  </ItemGroup>
 </Project>

@@ -1,6 +1,10 @@
-### Model Loading API Tests
-@baseUrl = http://localhost:5181
-@apiBase = {{baseUrl}}/api/models
+# ### Model Loading API Tests
+# @baseUrl = http://localhost:5181
+# @apiBase = {{baseUrl}}/api/models
+
+# Filer Proxy
+@baseUrl = http://localhost:27010
+@apiBase = {{baseUrl}}/lm/api/models
 
 @model = hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
 @alias = llama-3-8b
@@ -18,6 +22,9 @@ Content-Type: application/json
     "batch_size": 512
   }
 }
+
+#### 200 OK
+{"message":"Model 'llama-3-8b' loaded successfully","model":{"alias":"llama-3-8b","id":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","name":"Llama-3.2-3B-Instruct-GGUF","description":"bartowski/Llama-3.2-3B-Instruct-GGUF - Tags: gguf, facebook, meta, llama, llama-3 - Created by bartowski","version":"20241008","localPath":"D:\\filer-data\\models\\bartowski_Llama-3.2-3B-Instruct-GGUF","capabilities":{"supportsTextGeneration":true,"supportsEmbeddings":false,"supportsImageUnderstanding":false,"maxContextLength":4096},"registry":"hf","repoId":"bartowski/Llama-3.2-3B-Instruct-GGUF","type":"TextGeneration","format":"gguf","artifactName":"Llama-3.2-3B-Instruct-IQ3_M","sizeInBytes":387527385,"filePaths":["Llama-3.2-3B-Instruct-IQ3_M.gguf"],"isLocal":true,"isLoaded":true}}
 
 ### Load model by full ID
 POST {{apiBase}}/load
@@ -78,6 +85,9 @@ Content-Type: application/json
   "model": "{{alias}}"
 }
 
+#### 200 OK
+{"message":"Model 'llama-3-8b' unloaded successfully"}
+
 ### Unload model by full ID
 POST {{apiBase}}/unload
 Content-Type: application/json
@@ -85,6 +95,9 @@ Content-Type: application/json
 {
   "model": "{{model}}"
 }
+
+### 200 OK: if model is not loaded
+{"message":"Model 'hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M' is not currently loaded"}
 
 ### Unload embedding model
 POST {{apiBase}}/unload

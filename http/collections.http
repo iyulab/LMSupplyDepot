@@ -1,486 +1,251 @@
-# LMSupplyDepot
-@baseUrl = http://localhost:5181
-@apiBase = {{baseUrl}}/api
+# # LMSupplyDepot
+# @baseUrl = http://localhost:5181
+# @apiBase = {{baseUrl}}/api
 
-## Filer Proxy
-# @baseUrl = http://localhost:27010
-# @apiBase = {{baseUrl}}/lm/api
+# Filer Proxy
+@baseUrl = http://localhost:27010
+@apiBase = {{baseUrl}}/lm/api
 
 ### Discover model collections
 GET {{apiBase}}/collections/discover
 
+### Discover collections with search term
+GET {{apiBase}}/collections/discover?q=llama&limit=10
+
+### Discover collections by type
+GET {{apiBase}}/collections/discover?type=TextGeneration&q=llama&limit=20
+
 #### 200 OK
 [
     {
-        "id": "hf:kalle07/embedder_collection",
+        "id": "hf:QuantFactory/DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored-GGUF",
         "hub": "hf",
-        "collectionId": "kalle07/embedder_collection",
-        "name": "embedder_collection",
-        "type": "Embedding",
+        "collectionId": "QuantFactory/DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored-GGUF",
+        "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored-GGUF",
+        "type": "TextGeneration",
         "defaultFormat": "GGUF",
-        "version": "20250606",
-        "description": "kalle07/embedder_collection - Tags: sentence-transformers, gguf, sentence-similarity, feature-extraction, embedder - Created by kalle07",
-        "publisher": "kalle07",
-        "availableArtifacts":
+        "version": "20240729",
+        "description": "QuantFactory/DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored-GGUF - Tags: gguf, roleplay, llama3, sillytavern, idol - Created by QuantFactory",
+        "publisher": "QuantFactory",
+        "artifacts":
         [
             {
-                "name": "bce-embedding-base_v1-f16",
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q2_K",
                 "format": "gguf",
                 "sizeInBytes": 0,
                 "filePaths":
                 [
-                    "bce-embedding-base_v1-f16.gguf"
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q2_K.gguf"
                 ],
-                "description": "GGUF format",
-                "mainFilePath": "bce-embedding-base_v1-f16.gguf"
+                "description": "GGUF format, Q2 quantization",
+                "quantizationBits": 2,
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q2_K.gguf"
             },
             {
-                "name": "bce-embedding-base_v1-q8_0",
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q3_K_L",
                 "format": "gguf",
                 "sizeInBytes": 0,
                 "filePaths":
                 [
-                    "bce-embedding-base_v1-q8_0.gguf"
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q3_K_L.gguf"
                 ],
-                "description": "GGUF format",
-                "mainFilePath": "bce-embedding-base_v1-q8_0.gguf"
+                "description": "GGUF format, Q3 quantization, Large size",
+                "quantizationBits": 3,
+                "sizeCategory": "Large",
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q3_K_L.gguf"
             },
             {
-                "name": "bge-large-en-v1.5-f16",
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q3_K_M",
                 "format": "gguf",
                 "sizeInBytes": 0,
                 "filePaths":
                 [
-                    "bge-large-en-v1.5-f16.gguf"
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q3_K_M.gguf"
                 ],
-                "description": "GGUF format",
-                "mainFilePath": "bge-large-en-v1.5-f16.gguf"
+                "description": "GGUF format, Q3 quantization, Medium size",
+                "quantizationBits": 3,
+                "sizeCategory": "Medium",
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q3_K_M.gguf"
             },
             {
-                "name": "bge-large-en-v15-q8_0",
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q3_K_S",
                 "format": "gguf",
                 "sizeInBytes": 0,
                 "filePaths":
                 [
-                    "bge-large-en-v15-q8_0.gguf"
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q3_K_S.gguf"
                 ],
-                "description": "GGUF format",
-                "mainFilePath": "bge-large-en-v15-q8_0.gguf"
+                "description": "GGUF format, Q3 quantization, Small size",
+                "quantizationBits": 3,
+                "sizeCategory": "Small",
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q3_K_S.gguf"
             },
             {
-                "name": "bge-large-mpnet-base-all-nli-triplet-final-q8_0",
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_0",
                 "format": "gguf",
                 "sizeInBytes": 0,
                 "filePaths":
                 [
-                    "bge-large-mpnet-base-all-nli-triplet-final-q8_0.gguf"
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_0.gguf"
                 ],
-                "description": "GGUF format",
-                "mainFilePath": "bge-large-mpnet-base-all-nli-triplet-final-q8_0.gguf"
+                "description": "GGUF format, Q4 quantization",
+                "quantizationBits": 4,
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_0.gguf"
             },
             {
-                "name": "bge-m3-q8_0",
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_1",
                 "format": "gguf",
                 "sizeInBytes": 0,
                 "filePaths":
                 [
-                    "bge-m3-q8_0.gguf"
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_1.gguf"
                 ],
-                "description": "GGUF format",
-                "mainFilePath": "bge-m3-q8_0.gguf"
+                "description": "GGUF format, Q4 quantization",
+                "quantizationBits": 4,
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_1.gguf"
             },
             {
-                "name": "bge-reranker-v2-m3-q8_0",
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_K_M",
                 "format": "gguf",
                 "sizeInBytes": 0,
                 "filePaths":
                 [
-                    "bge-reranker-v2-m3-q8_0.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "bge-reranker-v2-m3-q8_0.gguf"
-            },
-            {
-                "name": "cross-en-de-roberta-sentence-transformer-fix-q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "cross-en-de-roberta-sentence-transformer-fix-q8_0.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "cross-en-de-roberta-sentence-transformer-fix-q8_0.gguf"
-            },
-            {
-                "name": "DE_jina_embeddings_v2_base-de_Q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "DE_jina_embeddings_v2_base-de_Q8_0.gguf"
-                ],
-                "description": "GGUF format, Q8 quantization",
-                "quantizationBits": 8,
-                "mainFilePath": "DE_jina_embeddings_v2_base-de_Q8_0.gguf"
-            },
-            {
-                "name": "e5-large-v2.f16",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "e5-large-v2.f16.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "e5-large-v2.f16.gguf"
-            },
-            {
-                "name": "ger-RAG-bge-M3-merg-snowf-artic-hessian-AI.Q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "ger-RAG-bge-M3-merg-snowf-artic-hessian-AI.Q8_0.gguf"
-                ],
-                "description": "GGUF format, Q8 quantization",
-                "quantizationBits": 8,
-                "mainFilePath": "ger-RAG-bge-M3-merg-snowf-artic-hessian-AI.Q8_0.gguf"
-            },
-            {
-                "name": "german-roberta-sentence-transformer-v2-q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "german-roberta-sentence-transformer-v2-q8_0.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "german-roberta-sentence-transformer-v2-q8_0.gguf"
-            },
-            {
-                "name": "gist-large-embedding-v0-Q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "gist-large-embedding-v0-Q8_0.gguf"
-                ],
-                "description": "GGUF format, Q8 quantization",
-                "quantizationBits": 8,
-                "mainFilePath": "gist-large-embedding-v0-Q8_0.gguf"
-            },
-            {
-                "name": "granite_multilingualQ8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "granite_multilingualQ8_0.gguf"
-                ],
-                "description": "GGUF format, Q8 quantization",
-                "quantizationBits": 8,
-                "mainFilePath": "granite_multilingualQ8_0.gguf"
-            },
-            {
-                "name": "granite-embedding-125m-english-f16",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "granite-embedding-125m-english-f16.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "granite-embedding-125m-english-f16.gguf"
-            },
-            {
-                "name": "granite-embedding-278m-multilingual-f16",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "granite-embedding-278m-multilingual-f16.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "granite-embedding-278m-multilingual-f16.gguf"
-            },
-            {
-                "name": "jina-embeddings-558M-v3-F16",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "jina-embeddings-558M-v3-F16.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "jina-embeddings-558M-v3-F16.gguf"
-            },
-            {
-                "name": "jina-embeddings-558M-v3-F16.Q4_K_M",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "jina-embeddings-558M-v3-F16.Q4_K_M.gguf"
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_K_M.gguf"
                 ],
                 "description": "GGUF format, Q4 quantization, Medium size",
                 "quantizationBits": 4,
                 "sizeCategory": "Medium",
-                "mainFilePath": "jina-embeddings-558M-v3-F16.Q4_K_M.gguf"
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_K_M.gguf"
             },
             {
-                "name": "jina-embeddings-v2-base-code-Q8_0",
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_K_S",
                 "format": "gguf",
                 "sizeInBytes": 0,
                 "filePaths":
                 [
-                    "jina-embeddings-v2-base-code-Q8_0.gguf"
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_K_S.gguf"
+                ],
+                "description": "GGUF format, Q4 quantization, Small size",
+                "quantizationBits": 4,
+                "sizeCategory": "Small",
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_K_S.gguf"
+            },
+            {
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q5_0",
+                "format": "gguf",
+                "sizeInBytes": 0,
+                "filePaths":
+                [
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q5_0.gguf"
+                ],
+                "description": "GGUF format, Q5 quantization",
+                "quantizationBits": 5,
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q5_0.gguf"
+            },
+            {
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q5_1",
+                "format": "gguf",
+                "sizeInBytes": 0,
+                "filePaths":
+                [
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q5_1.gguf"
+                ],
+                "description": "GGUF format, Q5 quantization",
+                "quantizationBits": 5,
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q5_1.gguf"
+            },
+            {
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q5_K_M",
+                "format": "gguf",
+                "sizeInBytes": 0,
+                "filePaths":
+                [
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q5_K_M.gguf"
+                ],
+                "description": "GGUF format, Q5 quantization, Medium size",
+                "quantizationBits": 5,
+                "sizeCategory": "Medium",
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q5_K_M.gguf"
+            },
+            {
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q5_K_S",
+                "format": "gguf",
+                "sizeInBytes": 0,
+                "filePaths":
+                [
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q5_K_S.gguf"
+                ],
+                "description": "GGUF format, Q5 quantization, Small size",
+                "quantizationBits": 5,
+                "sizeCategory": "Small",
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q5_K_S.gguf"
+            },
+            {
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q6_K",
+                "format": "gguf",
+                "sizeInBytes": 0,
+                "filePaths":
+                [
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q6_K.gguf"
+                ],
+                "description": "GGUF format, Q6 quantization",
+                "quantizationBits": 6,
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q6_K.gguf"
+            },
+            {
+                "name": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q8_0",
+                "format": "gguf",
+                "sizeInBytes": 0,
+                "filePaths":
+                [
+                    "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q8_0.gguf"
                 ],
                 "description": "GGUF format, Q8 quantization",
                 "quantizationBits": 8,
-                "mainFilePath": "jina-embeddings-v2-base-code-Q8_0.gguf"
-            },
-            {
-                "name": "jina-embeddings-v2-base-de-f16",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "jina-embeddings-v2-base-de-f16.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "jina-embeddings-v2-base-de-f16.gguf"
-            },
-            {
-                "name": "jina-embeddings-v2-base-en-f16",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "jina-embeddings-v2-base-en-f16.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "jina-embeddings-v2-base-en-f16.gguf"
-            },
-            {
-                "name": "jina-embeddings-v2-base-en-Q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "jina-embeddings-v2-base-en-Q8_0.gguf"
-                ],
-                "description": "GGUF format, Q8 quantization",
-                "quantizationBits": 8,
-                "mainFilePath": "jina-embeddings-v2-base-en-Q8_0.gguf"
-            },
-            {
-                "name": "mug-b-1.6-q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "mug-b-1.6-q8_0.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "mug-b-1.6-q8_0.gguf"
-            },
-            {
-                "name": "multilingual-e5-large-instruct-q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "multilingual-e5-large-instruct-q8_0.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "multilingual-e5-large-instruct-q8_0.gguf"
-            },
-            {
-                "name": "mxbai-embed-2d-large-v1-q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "mxbai-embed-2d-large-v1-q8_0.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "mxbai-embed-2d-large-v1-q8_0.gguf"
-            },
-            {
-                "name": "mxbai-embed-large-v1-f16",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "mxbai-embed-large-v1-f16.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "mxbai-embed-large-v1-f16.gguf"
-            },
-            {
-                "name": "mxbai-embed-large-v1.Q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "mxbai-embed-large-v1.Q8_0.gguf"
-                ],
-                "description": "GGUF format, Q8 quantization",
-                "quantizationBits": 8,
-                "mainFilePath": "mxbai-embed-large-v1.Q8_0.gguf"
-            },
-            {
-                "name": "nomic-embed-text-v1.5_f16",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "nomic-embed-text-v1.5_f16.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "nomic-embed-text-v1.5_f16.gguf"
-            },
-            {
-                "name": "nomic-embed-text-v1.5.f32",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "nomic-embed-text-v1.5.f32.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "nomic-embed-text-v1.5.f32.gguf"
-            },
-            {
-                "name": "paraphrase-multilingual-MiniLM-L12-118M-v2-F16",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "paraphrase-multilingual-MiniLM-L12-118M-v2-F16.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "paraphrase-multilingual-MiniLM-L12-118M-v2-F16.gguf"
-            },
-            {
-                "name": "paraphrase-multilingual-mpnet-base-277M-v2-F16",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "paraphrase-multilingual-mpnet-base-277M-v2-F16.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "paraphrase-multilingual-mpnet-base-277M-v2-F16.gguf"
-            },
-            {
-                "name": "paraphrase-multilingual-mpnet-base-v2-q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "paraphrase-multilingual-mpnet-base-v2-q8_0.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "paraphrase-multilingual-mpnet-base-v2-q8_0.gguf"
-            },
-            {
-                "name": "Qwen3-Embedding-0.6B-f16",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "Qwen3-Embedding-0.6B-f16.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "Qwen3-Embedding-0.6B-f16.gguf"
-            },
-            {
-                "name": "Qwen3-Embedding-0.6B-Q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "Qwen3-Embedding-0.6B-Q8_0.gguf"
-                ],
-                "description": "GGUF format, Q8 quantization",
-                "quantizationBits": 8,
-                "mainFilePath": "Qwen3-Embedding-0.6B-Q8_0.gguf"
-            },
-            {
-                "name": "sentence-transformers-e5-large-v2-q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "sentence-transformers-e5-large-v2-q8_0.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "sentence-transformers-e5-large-v2-q8_0.gguf"
-            },
-            {
-                "name": "sentence-transformers-multilingual-e5-large-q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "sentence-transformers-multilingual-e5-large-q8_0.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "sentence-transformers-multilingual-e5-large-q8_0.gguf"
-            },
-            {
-                "name": "snowflake-arctic-embed-l-v2.0-q8_0",
-                "format": "gguf",
-                "sizeInBytes": 0,
-                "filePaths":
-                [
-                    "snowflake-arctic-embed-l-v2.0-q8_0.gguf"
-                ],
-                "description": "GGUF format",
-                "mainFilePath": "snowflake-arctic-embed-l-v2.0-q8_0.gguf"
+                "mainFilePath": "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q8_0.gguf"
             }
         ],
         "capabilities":
         {
-            "supportsTextGeneration": false,
-            "supportsEmbeddings": true,
+            "supportsTextGeneration": true,
+            "supportsEmbeddings": false,
             "supportsImageUnderstanding": false,
-            "maxContextLength": 4096,
-            "embeddingDimension": 768
+            "maxContextLength": 4096
         },
         "tags":
         [
-            "sentence-transformers",
             "gguf",
-            "sentence-similarity",
-            "feature-extraction",
-            "embedder",
-            "embedding",
-            "models",
-            "GGUF",
-            "Bert",
-            "Nomic",
-            "Gist",
-            "BGE",
-            "Jina",
-            "text-embeddings-inference",
-            "RAG",
-            "Rerank",
-            "similarity",
-            "PDF",
-            "Parsing",
-            "Parser",
+            "roleplay",
+            "llama3",
+            "sillytavern",
+            "idol",
+            "facebook",
+            "meta",
+            "pytorch",
+            "llama",
+            "llama-3",
+            "text-generation",
             "en",
             "de",
-            "autotrain_compatible",
+            "fr",
+            "it",
+            "pt",
+            "hi",
+            "es",
+            "th",
+            "zh",
+            "ko",
+            "ja",
+            "arxiv:2204.05149",
+            "license:llama3.1",
             "endpoints_compatible",
-            "region:us"
+            "region:us",
+            "conversational"
         ],
-        "downloads": 22133,
-        "likes": 12,
-        "createdAt": "2025-03-03T16:46:55",
-        "lastModified": "2025-06-06T14:54:33",
+        "downloads": 61654,
+        "likes": 86,
+        "createdAt": "2024-07-28T07:02:48",
+        "lastModified": "2024-07-29T06:43:25",
         "isGated": false,
         "license": "",
         "language": ""
@@ -488,17 +253,11 @@ GET {{apiBase}}/collections/discover
     ...
 ]
 
-### Discover collections with search term
-GET {{apiBase}}/collections/discover?q=llama&limit=10
-
-### Discover collections by type
-GET {{apiBase}}/collections/discover?type=TextGeneration&limit=5
-
 ### Get specific collection info (using query string)
 GET {{apiBase}}/collections/info?collectionId=bartowski/Llama-3.2-3B-Instruct-GGUF
 
 #### 200 OK
-{"id":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF","hub":"hf","collectionId":"bartowski/Llama-3.2-3B-Instruct-GGUF","name":"Llama-3.2-3B-Instruct-GGUF","type":"TextGeneration","defaultFormat":"GGUF","version":"20241008","description":"bartowski/Llama-3.2-3B-Instruct-GGUF - Tags: gguf, facebook, meta, llama, llama-3 - Created by bartowski","publisher":"bartowski","availableArtifacts":[{"name":"Llama-3.2-3B-Instruct-f16","format":"gguf","sizeInBytes":6433687840,"filePaths":["Llama-3.2-3B-Instruct-f16.gguf"],"description":"GGUF format","mainFilePath":"Llama-3.2-3B-Instruct-f16.gguf"},{"name":"Llama-3.2-3B-Instruct-IQ3_M","format":"gguf","sizeInBytes":1599668768,"filePaths":["Llama-3.2-3B-Instruct-IQ3_M.gguf"],"description":"GGUF format, Q3 quantization, Medium size","quantizationBits":3,"sizeCategory":"Medium","mainFilePath":"Llama-3.2-3B-Instruct-IQ3_M.gguf"},{"name":"Llama-3.2-3B-Instruct-IQ4_XS","format":"gguf","sizeInBytes":1829110304,"filePaths":["Llama-3.2-3B-Instruct-IQ4_XS.gguf"],"description":"GGUF format, Q4 quantization, Extra Small size","quantizationBits":4,"sizeCategory":"Extra Small","mainFilePath":"Llama-3.2-3B-Instruct-IQ4_XS.gguf"},{"name":"Llama-3.2-3B-Instruct-Q3_K_L","format":"gguf","sizeInBytes":1815347744,"filePaths":["Llama-3.2-3B-Instruct-Q3_K_L.gguf"],"description":"GGUF format, Q3 quantization, Large size","quantizationBits":3,"sizeCategory":"Large","mainFilePath":"Llama-3.2-3B-Instruct-Q3_K_L.gguf"},{"name":"Llama-3.2-3B-Instruct-Q3_K_XL","format":"gguf","sizeInBytes":1910770208,"filePaths":["Llama-3.2-3B-Instruct-Q3_K_XL.gguf"],"description":"GGUF format, Q3 quantization, Extra Large size","quantizationBits":3,"sizeCategory":"Extra Large","mainFilePath":"Llama-3.2-3B-Instruct-Q3_K_XL.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_0","format":"gguf","sizeInBytes":1921909280,"filePaths":["Llama-3.2-3B-Instruct-Q4_0.gguf"],"description":"GGUF format, Q4 quantization","quantizationBits":4,"mainFilePath":"Llama-3.2-3B-Instruct-Q4_0.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_0_4_4","format":"gguf","sizeInBytes":1917190688,"filePaths":["Llama-3.2-3B-Instruct-Q4_0_4_4.gguf"],"description":"GGUF format, Q4 quantization","quantizationBits":4,"mainFilePath":"Llama-3.2-3B-Instruct-Q4_0_4_4.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_0_4_8","format":"gguf","sizeInBytes":1917190688,"filePaths":["Llama-3.2-3B-Instruct-Q4_0_4_8.gguf"],"description":"GGUF format, Q4 quantization","quantizationBits":4,"mainFilePath":"Llama-3.2-3B-Instruct-Q4_0_4_8.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_0_8_8","format":"gguf","sizeInBytes":1917190688,"filePaths":["Llama-3.2-3B-Instruct-Q4_0_8_8.gguf"],"description":"GGUF format, Q4 quantization","quantizationBits":4,"mainFilePath":"Llama-3.2-3B-Instruct-Q4_0_8_8.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_K_L","format":"gguf","sizeInBytes":2114800160,"filePaths":["Llama-3.2-3B-Instruct-Q4_K_L.gguf"],"description":"GGUF format, Q4 quantization, Large size","quantizationBits":4,"sizeCategory":"Large","mainFilePath":"Llama-3.2-3B-Instruct-Q4_K_L.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_K_M","format":"gguf","sizeInBytes":2019377696,"filePaths":["Llama-3.2-3B-Instruct-Q4_K_M.gguf"],"description":"GGUF format, Q4 quantization, Medium size","quantizationBits":4,"sizeCategory":"Medium","mainFilePath":"Llama-3.2-3B-Instruct-Q4_K_M.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_K_S","format":"gguf","sizeInBytes":1928200736,"filePaths":["Llama-3.2-3B-Instruct-Q4_K_S.gguf"],"description":"GGUF format, Q4 quantization, Small size","quantizationBits":4,"sizeCategory":"Small","mainFilePath":"Llama-3.2-3B-Instruct-Q4_K_S.gguf"},{"name":"Llama-3.2-3B-Instruct-Q5_K_L","format":"gguf","sizeInBytes":2417576480,"filePaths":["Llama-3.2-3B-Instruct-Q5_K_L.gguf"],"description":"GGUF format, Q5 quantization, Large size","quantizationBits":5,"sizeCategory":"Large","mainFilePath":"Llama-3.2-3B-Instruct-Q5_K_L.gguf"},{"name":"Llama-3.2-3B-Instruct-Q5_K_M","format":"gguf","sizeInBytes":2322154016,"filePaths":["Llama-3.2-3B-Instruct-Q5_K_M.gguf"],"description":"GGUF format, Q5 quantization, Medium size","quantizationBits":5,"sizeCategory":"Medium","mainFilePath":"Llama-3.2-3B-Instruct-Q5_K_M.gguf"},{"name":"Llama-3.2-3B-Instruct-Q5_K_S","format":"gguf","sizeInBytes":2269512224,"filePaths":["Llama-3.2-3B-Instruct-Q5_K_S.gguf"],"description":"GGUF format, Q5 quantization, Small size","quantizationBits":5,"sizeCategory":"Small","mainFilePath":"Llama-3.2-3B-Instruct-Q5_K_S.gguf"},{"name":"Llama-3.2-3B-Instruct-Q6_K","format":"gguf","sizeInBytes":2643853856,"filePaths":["Llama-3.2-3B-Instruct-Q6_K.gguf"],"description":"GGUF format, Q6 quantization","quantizationBits":6,"mainFilePath":"Llama-3.2-3B-Instruct-Q6_K.gguf"},{"name":"Llama-3.2-3B-Instruct-Q6_K_L","format":"gguf","sizeInBytes":2739276320,"filePaths":["Llama-3.2-3B-Instruct-Q6_K_L.gguf"],"description":"GGUF format, Q6 quantization, Large size","quantizationBits":6,"sizeCategory":"Large","mainFilePath":"Llama-3.2-3B-Instruct-Q6_K_L.gguf"},{"name":"Llama-3.2-3B-Instruct-Q8_0","format":"gguf","sizeInBytes":3421899296,"filePaths":["Llama-3.2-3B-Instruct-Q8_0.gguf"],"description":"GGUF format, Q8 quantization","quantizationBits":8,"mainFilePath":"Llama-3.2-3B-Instruct-Q8_0.gguf"}],"capabilities":{"supportsTextGeneration":true,"supportsEmbeddings":false,"supportsImageUnderstanding":false,"maxContextLength":4096},"tags":["gguf","facebook","meta","llama","llama-3","text-generation","en","de","fr","it","pt","hi","es","th","base_model:meta-llama/Llama-3.2-3B-Instruct","base_model:quantized:meta-llama/Llama-3.2-3B-Instruct","license:llama3.2","endpoints_compatible","region:us","conversational"],"downloads":109331,"likes":129,"createdAt":"2024-09-25T18:35:33","lastModified":"2024-10-08T14:01:10","isGated":false,"license":"","language":""}
+{"id":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF","hub":"hf","collectionId":"bartowski/Llama-3.2-3B-Instruct-GGUF","name":"Llama-3.2-3B-Instruct-GGUF","type":"TextGeneration","defaultFormat":"GGUF","version":"20241008","description":"bartowski/Llama-3.2-3B-Instruct-GGUF - Tags: gguf, facebook, meta, llama, llama-3 - Created by bartowski","publisher":"bartowski","artifacts":[{"name":"Llama-3.2-3B-Instruct-f16","format":"gguf","sizeInBytes":6433687840,"filePaths":["Llama-3.2-3B-Instruct-f16.gguf"],"description":"GGUF format","mainFilePath":"Llama-3.2-3B-Instruct-f16.gguf"},{"name":"Llama-3.2-3B-Instruct-IQ3_M","format":"gguf","sizeInBytes":1599668768,"filePaths":["Llama-3.2-3B-Instruct-IQ3_M.gguf"],"description":"GGUF format, Q3 quantization, Medium size","quantizationBits":3,"sizeCategory":"Medium","mainFilePath":"Llama-3.2-3B-Instruct-IQ3_M.gguf"},{"name":"Llama-3.2-3B-Instruct-IQ4_XS","format":"gguf","sizeInBytes":1829110304,"filePaths":["Llama-3.2-3B-Instruct-IQ4_XS.gguf"],"description":"GGUF format, Q4 quantization, Extra Small size","quantizationBits":4,"sizeCategory":"Extra Small","mainFilePath":"Llama-3.2-3B-Instruct-IQ4_XS.gguf"},{"name":"Llama-3.2-3B-Instruct-Q3_K_L","format":"gguf","sizeInBytes":1815347744,"filePaths":["Llama-3.2-3B-Instruct-Q3_K_L.gguf"],"description":"GGUF format, Q3 quantization, Large size","quantizationBits":3,"sizeCategory":"Large","mainFilePath":"Llama-3.2-3B-Instruct-Q3_K_L.gguf"},{"name":"Llama-3.2-3B-Instruct-Q3_K_XL","format":"gguf","sizeInBytes":1910770208,"filePaths":["Llama-3.2-3B-Instruct-Q3_K_XL.gguf"],"description":"GGUF format, Q3 quantization, Extra Large size","quantizationBits":3,"sizeCategory":"Extra Large","mainFilePath":"Llama-3.2-3B-Instruct-Q3_K_XL.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_0","format":"gguf","sizeInBytes":1921909280,"filePaths":["Llama-3.2-3B-Instruct-Q4_0.gguf"],"description":"GGUF format, Q4 quantization","quantizationBits":4,"mainFilePath":"Llama-3.2-3B-Instruct-Q4_0.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_0_4_4","format":"gguf","sizeInBytes":1917190688,"filePaths":["Llama-3.2-3B-Instruct-Q4_0_4_4.gguf"],"description":"GGUF format, Q4 quantization","quantizationBits":4,"mainFilePath":"Llama-3.2-3B-Instruct-Q4_0_4_4.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_0_4_8","format":"gguf","sizeInBytes":1917190688,"filePaths":["Llama-3.2-3B-Instruct-Q4_0_4_8.gguf"],"description":"GGUF format, Q4 quantization","quantizationBits":4,"mainFilePath":"Llama-3.2-3B-Instruct-Q4_0_4_8.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_0_8_8","format":"gguf","sizeInBytes":1917190688,"filePaths":["Llama-3.2-3B-Instruct-Q4_0_8_8.gguf"],"description":"GGUF format, Q4 quantization","quantizationBits":4,"mainFilePath":"Llama-3.2-3B-Instruct-Q4_0_8_8.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_K_L","format":"gguf","sizeInBytes":2114800160,"filePaths":["Llama-3.2-3B-Instruct-Q4_K_L.gguf"],"description":"GGUF format, Q4 quantization, Large size","quantizationBits":4,"sizeCategory":"Large","mainFilePath":"Llama-3.2-3B-Instruct-Q4_K_L.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_K_M","format":"gguf","sizeInBytes":2019377696,"filePaths":["Llama-3.2-3B-Instruct-Q4_K_M.gguf"],"description":"GGUF format, Q4 quantization, Medium size","quantizationBits":4,"sizeCategory":"Medium","mainFilePath":"Llama-3.2-3B-Instruct-Q4_K_M.gguf"},{"name":"Llama-3.2-3B-Instruct-Q4_K_S","format":"gguf","sizeInBytes":1928200736,"filePaths":["Llama-3.2-3B-Instruct-Q4_K_S.gguf"],"description":"GGUF format, Q4 quantization, Small size","quantizationBits":4,"sizeCategory":"Small","mainFilePath":"Llama-3.2-3B-Instruct-Q4_K_S.gguf"},{"name":"Llama-3.2-3B-Instruct-Q5_K_L","format":"gguf","sizeInBytes":2417576480,"filePaths":["Llama-3.2-3B-Instruct-Q5_K_L.gguf"],"description":"GGUF format, Q5 quantization, Large size","quantizationBits":5,"sizeCategory":"Large","mainFilePath":"Llama-3.2-3B-Instruct-Q5_K_L.gguf"},{"name":"Llama-3.2-3B-Instruct-Q5_K_M","format":"gguf","sizeInBytes":2322154016,"filePaths":["Llama-3.2-3B-Instruct-Q5_K_M.gguf"],"description":"GGUF format, Q5 quantization, Medium size","quantizationBits":5,"sizeCategory":"Medium","mainFilePath":"Llama-3.2-3B-Instruct-Q5_K_M.gguf"},{"name":"Llama-3.2-3B-Instruct-Q5_K_S","format":"gguf","sizeInBytes":2269512224,"filePaths":["Llama-3.2-3B-Instruct-Q5_K_S.gguf"],"description":"GGUF format, Q5 quantization, Small size","quantizationBits":5,"sizeCategory":"Small","mainFilePath":"Llama-3.2-3B-Instruct-Q5_K_S.gguf"},{"name":"Llama-3.2-3B-Instruct-Q6_K","format":"gguf","sizeInBytes":2643853856,"filePaths":["Llama-3.2-3B-Instruct-Q6_K.gguf"],"description":"GGUF format, Q6 quantization","quantizationBits":6,"mainFilePath":"Llama-3.2-3B-Instruct-Q6_K.gguf"},{"name":"Llama-3.2-3B-Instruct-Q6_K_L","format":"gguf","sizeInBytes":2739276320,"filePaths":["Llama-3.2-3B-Instruct-Q6_K_L.gguf"],"description":"GGUF format, Q6 quantization, Large size","quantizationBits":6,"sizeCategory":"Large","mainFilePath":"Llama-3.2-3B-Instruct-Q6_K_L.gguf"},{"name":"Llama-3.2-3B-Instruct-Q8_0","format":"gguf","sizeInBytes":3421899296,"filePaths":["Llama-3.2-3B-Instruct-Q8_0.gguf"],"description":"GGUF format, Q8 quantization","quantizationBits":8,"mainFilePath":"Llama-3.2-3B-Instruct-Q8_0.gguf"}],"capabilities":{"supportsTextGeneration":true,"supportsEmbeddings":false,"supportsImageUnderstanding":false,"maxContextLength":4096},"tags":["gguf","facebook","meta","llama","llama-3","text-generation","en","de","fr","it","pt","hi","es","th","base_model:meta-llama/Llama-3.2-3B-Instruct","base_model:quantized:meta-llama/Llama-3.2-3B-Instruct","license:llama3.2","endpoints_compatible","region:us","conversational"],"downloads":110601,"likes":130,"createdAt":"2024-09-25T18:35:33","lastModified":"2024-10-08T14:01:10","isGated":false,"license":"","language":""}
 
 ### Get collection info for embedding model
 GET {{apiBase}}/collections/info?collectionId=sentence-transformers/all-MiniLM-L6-v2

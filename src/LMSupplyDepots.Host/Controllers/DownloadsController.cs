@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LMSupplyDepots.Host.Controllers;
 
 /// <summary>
-/// Controller for model download operations
+/// Controller for model download operations - simplified and delegates all logic to SDK
 /// </summary>
 [ApiController]
 [Route("api/downloads")]
@@ -32,12 +32,12 @@ public class DownloadsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving all downloads");
-            return StatusCode(500, new ErrorResponse { Error = "An error occurred while retrieving downloads" });
+            return StatusCode(500, new ErrorResponse { Error = "Failed to retrieve downloads" });
         }
     }
 
     /// <summary>
-    /// Gets detailed download status including size and progress
+    /// Gets download progress for a model
     /// </summary>
     [HttpGet("status")]
     public async Task<ActionResult<ModelDownloadProgress?>> GetDownloadStatus(
@@ -55,30 +55,7 @@ public class DownloadsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving download status for model {Model}", model);
-            return StatusCode(500, new ErrorResponse { Error = $"An error occurred while retrieving download status for model {model}" });
-        }
-    }
-
-    /// <summary>
-    /// Gets simple download status for backward compatibility
-    /// </summary>
-    [HttpGet("status/simple")]
-    public async Task<ActionResult<ModelDownloadStatus?>> GetDownloadStatusSimple(
-        [FromQuery] string model,
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrEmpty(model))
-            return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
-
-        try
-        {
-            var status = await _hostService.GetDownloadStatusAsync(model, cancellationToken);
-            return Ok(status);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error retrieving simple download status for model {Model}", model);
-            return StatusCode(500, new ErrorResponse { Error = $"An error occurred while retrieving download status for model {model}" });
+            return StatusCode(500, new ErrorResponse { Error = "Failed to retrieve download status" });
         }
     }
 
@@ -86,30 +63,24 @@ public class DownloadsController : ControllerBase
     /// Starts downloading a model
     /// </summary>
     [HttpPost("start")]
-    public async Task<ActionResult> StartDownload([FromBody] ModelDownloadRequest request, CancellationToken cancellationToken = default)
+    public async Task<ActionResult> StartDownload([FromBody] DownloadRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(request.Model))
             return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
 
         try
         {
-            var currentProgress = await _hostService.GetDownloadProgressAsync(request.Model, cancellationToken);
-
-            if (currentProgress?.Status == ModelDownloadStatus.Downloading)
-                return Conflict(new ErrorResponse { Error = $"Model {request.Model} is already being downloaded" });
-
-            if (currentProgress?.Status == ModelDownloadStatus.Completed)
-                return Ok(CreateStatusResponse($"Model {request.Model} is already downloaded", request.Model, "Completed"));
-
-            // Start download in background
-            _ = StartDownloadInBackground(request.Model);
-
-            return Ok(CreateStatusResponse($"Download started for model {request.Model}", request.Model, "Started"));
+            var result = await _hostService.StartDownloadAsync(request.Model, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new ErrorResponse { Error = ex.Message });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error starting download for model {Model}", request.Model);
-            return StatusCode(500, new ErrorResponse { Error = $"An error occurred while starting download for model {request.Model}: {ex.Message}" });
+            return StatusCode(500, new ErrorResponse { Error = "Failed to start download" });
         }
     }
 
@@ -117,28 +88,20 @@ public class DownloadsController : ControllerBase
     /// Pauses a download
     /// </summary>
     [HttpPost("pause")]
-    public async Task<ActionResult> PauseDownload([FromBody] ModelActionRequest request, CancellationToken cancellationToken = default)
+    public async Task<ActionResult> PauseDownload([FromBody] DownloadRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(request.Model))
             return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
 
         try
         {
-            var currentProgress = await _hostService.GetDownloadProgressAsync(request.Model, cancellationToken);
-            var validationResult = ValidateDownloadAction(currentProgress, request.Model, "pause", ModelDownloadStatus.Downloading);
-
-            if (validationResult != null)
-                return validationResult;
-
-            bool result = await _hostService.PauseDownloadAsync(request.Model, cancellationToken);
-            return result
-                ? Ok(CreateStatusResponse($"Download paused for model {request.Model}", request.Model, "Paused"))
-                : BadRequest(new ErrorResponse { Error = $"Failed to pause download for model {request.Model}" });
+            var result = await _hostService.PauseDownloadAsync(request.Model, cancellationToken);
+            return Ok(result);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error pausing download for model {Model}", request.Model);
-            return StatusCode(500, new ErrorResponse { Error = $"An error occurred while pausing download for model {request.Model}: {ex.Message}" });
+            return StatusCode(500, new ErrorResponse { Error = "Failed to pause download" });
         }
     }
 
@@ -146,28 +109,20 @@ public class DownloadsController : ControllerBase
     /// Resumes a paused download
     /// </summary>
     [HttpPost("resume")]
-    public async Task<ActionResult> ResumeDownload([FromBody] ModelActionRequest request, CancellationToken cancellationToken = default)
+    public async Task<ActionResult> ResumeDownload([FromBody] DownloadRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(request.Model))
             return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
 
         try
         {
-            var currentProgress = await _hostService.GetDownloadProgressAsync(request.Model, cancellationToken);
-            var validationResult = ValidateDownloadAction(currentProgress, request.Model, "resume", ModelDownloadStatus.Paused);
-
-            if (validationResult != null)
-                return validationResult;
-
-            // Resume download in background
-            _ = ResumeDownloadInBackground(request.Model);
-
-            return Ok(CreateStatusResponse($"Download resumed for model {request.Model}", request.Model, "Resumed"));
+            var result = await _hostService.ResumeDownloadAsync(request.Model, cancellationToken);
+            return Ok(result);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error resuming download for model {Model}", request.Model);
-            return StatusCode(500, new ErrorResponse { Error = $"An error occurred while resuming download for model {request.Model}: {ex.Message}" });
+            return StatusCode(500, new ErrorResponse { Error = "Failed to resume download" });
         }
     }
 
@@ -175,101 +130,28 @@ public class DownloadsController : ControllerBase
     /// Cancels a download
     /// </summary>
     [HttpPost("cancel")]
-    public async Task<ActionResult> CancelDownload([FromBody] ModelActionRequest request, CancellationToken cancellationToken = default)
+    public async Task<ActionResult> CancelDownload([FromBody] DownloadRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(request.Model))
             return BadRequest(new ErrorResponse { Error = "Model ID or alias is required" });
 
         try
         {
-            var currentProgress = await _hostService.GetDownloadProgressAsync(request.Model, cancellationToken);
-
-            if (currentProgress == null)
-                return NotFound(new ErrorResponse { Error = $"No download found for model {request.Model}" });
-
-            if (currentProgress.Status == ModelDownloadStatus.Completed)
-                return Ok(CreateStatusResponse($"Model {request.Model} is already completed", request.Model, "Completed"));
-
-            bool result = await _hostService.CancelDownloadAsync(request.Model, cancellationToken);
-            return result
-                ? Ok(CreateStatusResponse($"Download cancelled for model {request.Model}", request.Model, "Cancelled"))
-                : BadRequest(new ErrorResponse { Error = $"Failed to cancel download for model {request.Model}" });
+            var result = await _hostService.CancelDownloadAsync(request.Model, cancellationToken);
+            return Ok(result);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error cancelling download for model {Model}", request.Model);
-            return StatusCode(500, new ErrorResponse { Error = $"An error occurred while cancelling download for model {request.Model}: {ex.Message}" });
+            return StatusCode(500, new ErrorResponse { Error = "Failed to cancel download" });
         }
     }
-
-    #region Private Helpers
-
-    private ActionResult? ValidateDownloadAction(ModelDownloadProgress? currentProgress, string model, string action, ModelDownloadStatus requiredStatus)
-    {
-        if (currentProgress == null)
-            return NotFound(new ErrorResponse { Error = $"No download found for model {model}" });
-
-        if (currentProgress.Status == ModelDownloadStatus.Completed)
-            return Ok(CreateStatusResponse($"Model {model} is already completed", model, "Completed"));
-
-        if (currentProgress.Status == requiredStatus)
-            return Ok(CreateStatusResponse($"Model {model} is already {requiredStatus.ToString().ToLower()}", model, requiredStatus.ToString()));
-
-        if (currentProgress.Status != requiredStatus && action == "pause" && requiredStatus == ModelDownloadStatus.Downloading)
-            return BadRequest(new ErrorResponse { Error = $"Cannot pause model {model} - current status: {currentProgress.Status}" });
-
-        if (currentProgress.Status != requiredStatus && action == "resume" && requiredStatus == ModelDownloadStatus.Paused)
-            return BadRequest(new ErrorResponse { Error = $"Cannot resume model {model} - current status: {currentProgress.Status}" });
-
-        return null;
-    }
-
-    private object CreateStatusResponse(string message, string model, string status) =>
-        new { Message = message, Model = model, Status = status };
-
-    private Task StartDownloadInBackground(string model) =>
-        Task.Run(async () =>
-        {
-            try
-            {
-                await _hostService.DownloadModelAsync(model, null, CancellationToken.None);
-                _logger.LogInformation("Background download completed for model {Model}", model);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Background download failed for model {Model}", model);
-            }
-        });
-
-    private Task ResumeDownloadInBackground(string model) =>
-        Task.Run(async () =>
-        {
-            try
-            {
-                await _hostService.ResumeDownloadAsync(model, null, CancellationToken.None);
-                _logger.LogInformation("Background resume completed for model {Model}", model);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Background resume failed for model {Model}", model);
-            }
-        });
-
-    #endregion
 }
 
 /// <summary>
-/// Request model for starting a download
+/// Request model for download operations
 /// </summary>
-public class ModelDownloadRequest
-{
-    public string Model { get; set; } = string.Empty;
-}
-
-/// <summary>
-/// Request model for download actions
-/// </summary>
-public class ModelActionRequest
+public class DownloadRequest
 {
     public string Model { get; set; } = string.Empty;
 }

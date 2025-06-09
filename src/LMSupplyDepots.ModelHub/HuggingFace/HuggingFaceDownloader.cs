@@ -39,13 +39,29 @@ public partial class HuggingFaceDownloader : IModelDownloader, IDisposable
     }
 
     /// <summary>
+    /// Determines if this downloader can handle the given source ID
+    /// </summary>
+    public bool CanHandle(string sourceId)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId))
+            return false;
+
+        if (_sourceIdRegex.IsMatch(sourceId))
+            return true;
+
+        if (sourceId.Contains('/'))
+            return true;
+
+        return false;
+    }
+
+    /// <summary>
     /// Creates a HuggingFaceClient with the configured options
     /// </summary>
     private HuggingFaceClient CreateClient()
     {
         var clientOptions = new HuggingFaceClientOptions
         {
-            // Token can be null or empty for public models
             Token = string.IsNullOrWhiteSpace(_options.ApiToken) ? null : _options.ApiToken,
             MaxConcurrentDownloads = _options.MaxConcurrentFileDownloads,
             Timeout = _options.RequestTimeout,
@@ -65,44 +81,25 @@ public partial class HuggingFaceDownloader : IModelDownloader, IDisposable
     }
 
     /// <summary>
-    /// Determines if this downloader can handle the given source ID
+    /// Gets the model directory path for a model identifier
     /// </summary>
-    public bool CanHandle(string sourceId)
+    internal string GetModelDirectoryPath(ModelIdentifier identifier)
     {
-        if (string.IsNullOrWhiteSpace(sourceId))
-            return false;
-
-        if (_sourceIdRegex.IsMatch(sourceId))
-            return true;
-
-        if (sourceId.Contains('/'))
-            return true;
-
-        return false;
+        return FileSystemHelper.GetModelDirectoryPath(identifier, _hubOptions.DataPath);
     }
 
-    /// <summary>
-    /// Clean up resources
-    /// </summary>
     public void Dispose()
     {
         Dispose(true);
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>
-    /// Protected implementation of Dispose pattern
-    /// </summary>
     protected virtual void Dispose(bool disposing)
     {
         if (!_disposed)
         {
             if (disposing)
             {
-                // Clean up cancellation tokens first
-                CleanupCancellationTokens();
-
-                // Then dispose the client
                 if (_client.IsValueCreated)
                 {
                     _client.Value.Dispose();

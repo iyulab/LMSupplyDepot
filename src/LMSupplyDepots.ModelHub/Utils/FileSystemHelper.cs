@@ -76,8 +76,6 @@ public static class FileSystemHelper
         {
             BasePath = basePath,
             ModelsPath = modelsPath,
-            ModelTypePath = "", // No longer used
-            PublisherPath = "", // No longer used  
             ModelNamePath = collectionPath,
 
             ModelId = modelId.ToString(),

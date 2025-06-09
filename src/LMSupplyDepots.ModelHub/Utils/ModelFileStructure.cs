@@ -51,18 +51,6 @@ public class ModelFileStructure
     public string ModelsPath { get; init; } = string.Empty;
 
     /// <summary>
-    /// Gets the path to the model type directory (legacy - no longer used)
-    /// </summary>
-    [Obsolete("Model type directories are no longer used")]
-    public string ModelTypePath { get; init; } = string.Empty;
-
-    /// <summary>
-    /// Gets the path to the publisher directory (legacy - no longer used)
-    /// </summary>
-    [Obsolete("Publisher directories are no longer used")]
-    public string PublisherPath { get; init; } = string.Empty;
-
-    /// <summary>
     /// Gets the path to the model directory (now collection directory)
     /// </summary>
     public string ModelNamePath { get; init; } = string.Empty;

@@ -27,13 +27,35 @@ public interface IHostService
 
     #region Model Download Management
 
-    Task<LMModel> DownloadModelAsync(string modelId, IProgress<ModelDownloadProgress>? progress = null, CancellationToken cancellationToken = default);
-    Task<bool> PauseDownloadAsync(string modelId, CancellationToken cancellationToken = default);
-    Task<LMModel> ResumeDownloadAsync(string modelId, IProgress<ModelDownloadProgress>? progress = null, CancellationToken cancellationToken = default);
-    Task<bool> CancelDownloadAsync(string modelId, CancellationToken cancellationToken = default);
-    Task<ModelDownloadStatus?> GetDownloadStatusAsync(string modelId, CancellationToken cancellationToken = default);
-    Task<ModelDownloadProgress?> GetDownloadProgressAsync(string modelId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Gets download progress for a model
+    /// </summary>
+    Task<ModelDownloadProgress?> GetDownloadProgressAsync(string modelKey, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets information about all current downloads
+    /// </summary>
     Task<IEnumerable<DownloadInfo>> GetAllDownloadsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Starts a download with validation and returns operation result
+    /// </summary>
+    Task<DownloadOperationResult> StartDownloadAsync(string modelKey, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Pauses a download with validation and returns operation result
+    /// </summary>
+    Task<DownloadOperationResult> PauseDownloadAsync(string modelKey, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resumes a download with validation and returns operation result
+    /// </summary>
+    Task<DownloadOperationResult> ResumeDownloadAsync(string modelKey, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cancels a download with validation and returns operation result
+    /// </summary>
+    Task<DownloadOperationResult> CancelDownloadAsync(string modelKey, CancellationToken cancellationToken = default);
 
     #endregion
 
@@ -60,4 +82,36 @@ public interface IHostService
     Task<EmbeddingResponse> GenerateEmbeddingsAsync(string modelId, IReadOnlyList<string> texts, bool normalize = false, Dictionary<string, object?>? parameters = null, CancellationToken cancellationToken = default);
 
     #endregion
+}
+
+/// <summary>
+/// Result for download operations with validation
+/// </summary>
+public class DownloadOperationResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public ModelDownloadProgress? Progress { get; set; }
+
+    public static DownloadOperationResult CreateSuccess(string message, string status, ModelDownloadProgress? progress = null)
+    {
+        return new DownloadOperationResult
+        {
+            Success = true,
+            Message = message,
+            Status = status,
+            Progress = progress
+        };
+    }
+
+    public static DownloadOperationResult CreateFailure(string message, string status = "Failed")
+    {
+        return new DownloadOperationResult
+        {
+            Success = false,
+            Message = message,
+            Status = status
+        };
+    }
 }

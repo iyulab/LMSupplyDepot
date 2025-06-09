@@ -13,6 +13,9 @@
 GET {{v1Base}}/models
 Accept: application/json
 
+#### 200 OK
+{"models":[{"type":"text-generation","name":"llama-3-8b"}]}
+
 ### Generate text with alias
 POST {{v1Base}}/chat/completions
 Content-Type: application/json

@@ -1,4 +1,4 @@
-# LMSUpplyDepot
+# # LMSUpplyDepot
 @baseUrl = http://localhost:5181
 @apiBase = {{baseUrl}}/api/downloads
 
@@ -6,24 +6,36 @@
 # @baseUrl = http://localhost:27010
 # @apiBase = {{baseUrl}}/lm/api/downloads
 
-@model = hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
+@model = hf:unsloth/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-UD-IQ1_S
 
 ### Get all active downloads
 GET {{apiBase}}
 
 #### 200 OK
-[{"modelId":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","status":"Cancelled","startedAt":"2025-06-04T01:45:21.9596815Z"}]
+[{"modelId":"hf:unsloth/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-UD-IQ1_S","status":"Downloading","progress":{"modelId":"hf:unsloth/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-UD-IQ1_S","fileName":"Llama-3.2-1B-Instruct-UD-IQ1_S.gguf","bytesDownloaded":35667968,"totalBytes":421617696,"bytesPerSecond":0,"status":"Downloading","startedAt":"2025-06-09T03:33:44.6476859Z","progressPercentage":8.459789126118654},"startedAt":"2025-06-09T03:33:44.6476859Z"}]
 
-#### 200 OK
-[{"modelId":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","status":"Downloading","progress":{"modelId":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","fileName":"Llama-3.2-3B-Instruct-IQ3_M.gguf","bytesDownloaded":456636085,"totalBytes":1599668768,"bytesPerSecond":32050815.480084434,"estimatedTimeRemaining":"00:00:41.6102875","status":"Downloading","progressPercentage":28.545664836034355},"startedAt":"2025-06-04T01:46:08.2365821Z"}]
-
-### Get download status for a specific model (using query string)
+### Get detailed download status (new unified endpoint)
 GET {{apiBase}}/status?model={{model}}
 
-### Get download status by alias
-GET {{apiBase}}/status?model=llama-3-8b
+#### 200 OK, Expected:
+{"modelId":"hf:unsloth/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-UD-IQ1_S","fileName":"Llama-3.2-1B-Instruct-UD-IQ1_S.gguf","bytesDownloaded":31864755,"totalBytes":421617696,"bytesPerSecond":0,"status":"Downloading","startedAt":"2025-06-09T02:36:31.126598Z","progressPercentage":7.55773661834156}
 
-### Start downloading a model (using POST body)
+### Get download status for completed model
+GET {{apiBase}}/status?model={{model}}
+
+#### 200 OK, Downloading
+{"modelId":"hf:unsloth/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-UD-IQ1_S","fileName":"Llama-3.2-1B-Instruct-UD-IQ1_S.gguf","bytesDownloaded":83640320,"totalBytes":421617696,"bytesPerSecond":0,"status":"Downloading","startedAt":"2025-06-09T03:33:44.6476859Z","progressPercentage":19.837952911729776}
+
+#### 200 OK, Paused
+{"modelId":"hf:unsloth/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-UD-IQ1_S","fileName":"Llama-3.2-1B-Instruct-UD-IQ1_S.gguf","bytesDownloaded":154034063,"totalBytes":421617696,"bytesPerSecond":0,"status":"Paused","startedAt":"2025-06-09T03:33:44.6476859Z","progressPercentage":36.53406023071669}
+
+### Get download status for non-existent model
+GET {{apiBase}}/status?model=non-existent-model
+
+#### 200 OK, Expected:
+{"modelId":"non-existent-model","fileName":"","bytesDownloaded":0,"bytesPerSecond":0,"status":"Failed","errorMessage":"Model not found in downloads","progressPercentage":0}
+
+### Start downloading a model
 POST {{apiBase}}/start
 Content-Type: application/json
 
@@ -32,15 +44,7 @@ Content-Type: application/json
 }
 
 #### 200 OK
-{"message":"Download started for model hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","model":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","status":"Started"}
-
-### Start downloading embedding model
-POST {{apiBase}}/start
-Content-Type: application/json
-
-{
-  "model": "hf:sentence-transformers/all-MiniLM-L6-v2"
-}
+{"message":"Download started for model hf:unsloth/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-UD-IQ1_S","model":"hf:unsloth/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-UD-IQ1_S","status":"Started"}
 
 ### Pause download
 POST {{apiBase}}/pause
@@ -51,7 +55,7 @@ Content-Type: application/json
 }
 
 #### 200 OK
-{"message":"Download paused for model hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","model":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","status":"Paused"}
+{"success":true,"message":"Download paused for model hf:unsloth/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-UD-IQ1_S","status":"Paused","progress":{"modelId":"hf:unsloth/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-UD-IQ1_S","fileName":"Llama-3.2-1B-Instruct-UD-IQ1_S.gguf","bytesDownloaded":154025984,"totalBytes":421617696,"bytesPerSecond":0,"status":"Paused","startedAt":"2025-06-09T03:33:44.6476859Z","progressPercentage":36.53214403979856}}
 
 ### Resume download
 POST {{apiBase}}/resume
@@ -62,7 +66,7 @@ Content-Type: application/json
 }
 
 #### 200 OK
-{"message":"Download resumed for model hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","model":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","status":"Resumed"}
+{"success":true,"message":"Download resumed for model hf:unsloth/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-UD-IQ1_S","status":"Resumed"}
 
 ### Cancel download
 POST {{apiBase}}/cancel
@@ -72,5 +76,33 @@ Content-Type: application/json
   "model": "{{model}}"
 }
 
-#### 200 OK
-{"message":"Download cancelled for model hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","model":"hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M","status":"Cancelled"}
+### Download workflow test
+### 1. Start download
+POST {{apiBase}}/start
+Content-Type: application/json
+
+{
+  "model": "hf:microsoft/DialoGPT-small"
+}
+
+### 2. Monitor detailed status
+GET {{apiBase}}/status?model=hf:microsoft/DialoGPT-small
+
+### 3. Pause download
+POST {{apiBase}}/pause
+Content-Type: application/json
+
+{
+  "model": "hf:microsoft/DialoGPT-small"
+}
+
+### 4. Check paused status
+GET {{apiBase}}/status?model=hf:microsoft/DialoGPT-small
+
+### 5. Resume download
+POST {{apiBase}}/resume
+Content-Type: application/json
+
+{
+  "model": "hf:microsoft/DialoGPT-small"
+}

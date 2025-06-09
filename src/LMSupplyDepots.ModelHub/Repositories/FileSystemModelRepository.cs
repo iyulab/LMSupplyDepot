@@ -1,15 +1,13 @@
 namespace LMSupplyDepots.ModelHub.Repositories;
 
 /// <summary>
-/// Implementation of IModelRepository that stores models in the file system
+/// Implementation of IModelRepository that directly scans the file system without caching
 /// </summary>
 public class FileSystemModelRepository : IModelRepository, IDisposable
 {
     private readonly string _baseDirectory;
     private readonly ILogger<FileSystemModelRepository> _logger;
-    private readonly ConcurrentDictionary<string, LMModel> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _lock = new(1, 1);
-    private bool _initialized;
     private bool _disposed;
 
     /// <summary>
@@ -21,62 +19,34 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
     {
         _baseDirectory = options.Value.DataPath;
         _logger = logger;
+
+        // Ensure base directories exist
+        FileSystemHelper.EnsureBaseDirectoriesExists(_baseDirectory);
     }
 
     /// <summary>
-    /// Gets a model by its identifier or alias
+    /// Gets a model by its identifier or alias - scans file system directly
     /// </summary>
     public async Task<LMModel?> GetModelAsync(string keyOrId, CancellationToken cancellationToken = default)
     {
-        await EnsureInitializedAsync(cancellationToken);
-
-        // Try direct lookup by ID first
-        if (_cache.TryGetValue(keyOrId, out var model))
+        // First try to find by ID
+        var model = await FindModelByIdAsync(keyOrId, cancellationToken);
+        if (model != null)
         {
             return model;
         }
 
-        // Try lookup by alias
-        var modelByAlias = _cache.Values.FirstOrDefault(m =>
+        // Then try to find by alias by scanning all models
+        var allModels = await ScanAllModelsAsync(cancellationToken);
+        var modelByAlias = allModels.FirstOrDefault(m =>
             !string.IsNullOrEmpty(m.Alias) &&
             string.Equals(m.Alias, keyOrId, StringComparison.OrdinalIgnoreCase));
 
-        if (modelByAlias != null)
-        {
-            return modelByAlias;
-        }
-
-        // Try to parse as a model identifier and load from file
-        if (ModelIdentifier.TryParse(keyOrId, out var identifier))
-        {
-            var metadataFilePath = FileSystemHelper.GetMetadataFilePath(identifier, _baseDirectory);
-
-            if (File.Exists(metadataFilePath))
-            {
-                try
-                {
-                    var json = await File.ReadAllTextAsync(metadataFilePath, cancellationToken);
-                    var loadedModel = JsonHelper.Deserialize<LMModel>(json);
-
-                    if (loadedModel != null)
-                    {
-                        _cache[loadedModel.Id] = loadedModel;
-                        return loadedModel;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to load model metadata for {ModelId} from {FilePath}",
-                        keyOrId, metadataFilePath);
-                }
-            }
-        }
-
-        return null;
+        return modelByAlias;
     }
 
     /// <summary>
-    /// Lists models with optional filtering and pagination
+    /// Lists models by directly scanning the file system
     /// </summary>
     public async Task<IReadOnlyList<LMModel>> ListModelsAsync(
         ModelType? type = null,
@@ -85,9 +55,9 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
         int take = 100,
         CancellationToken cancellationToken = default)
     {
-        await EnsureInitializedAsync(cancellationToken);
+        var allModels = await ScanAllModelsAsync(cancellationToken);
 
-        var query = _cache.Values.AsEnumerable();
+        var query = allModels.AsEnumerable();
 
         if (type.HasValue)
         {
@@ -149,7 +119,6 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
 
             // Save metadata
             var json = JsonHelper.Serialize(model);
-
             await File.WriteAllTextAsync(metadataFilePath, json, cancellationToken);
 
             // Update the LocalPath 
@@ -157,9 +126,6 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
             {
                 model.LocalPath = FileSystemHelper.GetModelDirectoryPath(modelId, _baseDirectory);
             }
-
-            // Update the cache
-            _cache[model.Id] = model;
 
             _logger.LogInformation("Saved model metadata for {ModelId} to {FilePath}", model.Id, metadataFilePath);
 
@@ -172,7 +138,7 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
     }
 
     /// <summary>
-    /// Removes a model from the repository
+    /// Removes a model from the repository by deleting its files
     /// </summary>
     public async Task<bool> DeleteModelAsync(string modelId, CancellationToken cancellationToken = default)
     {
@@ -180,10 +146,19 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
         try
         {
             // Try to get the model first
-            var model = await GetModelAsync(modelId, cancellationToken);
+            var model = await FindModelByIdAsync(modelId, cancellationToken);
             if (model == null)
             {
-                return false;
+                // Also try by alias
+                var allModels = await ScanAllModelsAsync(cancellationToken);
+                model = allModels.FirstOrDefault(m =>
+                    !string.IsNullOrEmpty(m.Alias) &&
+                    string.Equals(m.Alias, modelId, StringComparison.OrdinalIgnoreCase));
+
+                if (model == null)
+                {
+                    return false;
+                }
             }
 
             // Create a ModelIdentifier and get model directory path
@@ -205,9 +180,6 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
                 }
             }
 
-            // Remove from cache
-            _cache.TryRemove(modelId, out _);
-
             _logger.LogInformation("Deleted model {ModelId}", modelId);
             return true;
         }
@@ -223,12 +195,12 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
     }
 
     /// <summary>
-    /// Checks if a model exists in the repository
+    /// Checks if a model exists by scanning the file system
     /// </summary>
     public async Task<bool> ExistsAsync(string modelId, CancellationToken cancellationToken = default)
     {
-        await EnsureInitializedAsync(cancellationToken);
-        return _cache.ContainsKey(modelId) || await GetModelAsync(modelId, cancellationToken) != null;
+        var model = await GetModelAsync(modelId, cancellationToken);
+        return model != null;
     }
 
     /// <summary>
@@ -240,50 +212,71 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
     }
 
     /// <summary>
-    /// Initializes the repository by scanning for models
+    /// Scans all models in the file system
     /// </summary>
-    private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
+    private async Task<List<LMModel>> ScanAllModelsAsync(CancellationToken cancellationToken)
     {
-        if (_initialized) return;
+        var models = new List<LMModel>();
 
-        await _lock.WaitAsync(cancellationToken);
         try
         {
-            if (_initialized) return;
+            _logger.LogDebug("Scanning models in {BaseDir}", _baseDirectory);
 
-            FileSystemHelper.EnsureBaseDirectoriesExists(_baseDirectory);
-            await ScanForModelsAsync(cancellationToken);
+            // Use the helper to find all metadata files
+            var metadataFiles = FileSystemHelper.FindAllModelMetadataFiles(_baseDirectory);
 
-            _initialized = true;
+            foreach (var metadataFile in metadataFiles)
+            {
+                var model = await LoadModelFromMetadataFileAsync(metadataFile, cancellationToken);
+                if (model != null)
+                {
+                    models.Add(model);
+                }
+            }
+
+            _logger.LogDebug("Found {Count} models in file system", models.Count);
         }
-        finally
+        catch (Exception ex)
         {
-            _lock.Release();
+            _logger.LogError(ex, "Error scanning models from file system");
         }
+
+        return models;
     }
 
     /// <summary>
-    /// Scans for models by finding all metadata files
+    /// Finds a model by its ID by scanning the file system
     /// </summary>
-    private async Task ScanForModelsAsync(CancellationToken cancellationToken)
+    private async Task<LMModel?> FindModelByIdAsync(string modelId, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Scanning for models in {BaseDir}", _baseDirectory);
-
-        // Use the helper to find all metadata files
-        var metadataFiles = FileSystemHelper.FindAllModelMetadataFiles(_baseDirectory);
-
-        foreach (var metadataFile in metadataFiles)
+        try
         {
-            await LoadModelFromMetadataFileAsync(metadataFile, cancellationToken);
-        }
+            // Try to parse as a model identifier and load from file
+            if (ModelIdentifier.TryParse(modelId, out var identifier))
+            {
+                var metadataFilePath = FileSystemHelper.GetMetadataFilePath(identifier, _baseDirectory);
 
-        _logger.LogInformation("Loaded {Count} models from disk", _cache.Count);
+                if (File.Exists(metadataFilePath))
+                {
+                    return await LoadModelFromMetadataFileAsync(metadataFilePath, cancellationToken);
+                }
+            }
+
+            // If direct lookup fails, scan all models (this handles cases where the ID format might be different)
+            var allModels = await ScanAllModelsAsync(cancellationToken);
+            return allModels.FirstOrDefault(m => m.Id.Equals(modelId, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error finding model by ID {ModelId}", modelId);
+            return null;
+        }
     }
 
     /// <summary>
     /// Loads a model from a metadata file
     /// </summary>
-    private async Task LoadModelFromMetadataFileAsync(string metadataFilePath, CancellationToken cancellationToken)
+    private async Task<LMModel?> LoadModelFromMetadataFileAsync(string metadataFilePath, CancellationToken cancellationToken)
     {
         try
         {
@@ -298,14 +291,35 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
                     model.LocalPath = Path.GetDirectoryName(metadataFilePath);
                 }
 
-                _cache[model.Id] = model;
-                _logger.LogDebug("Loaded model {ModelId} from {FilePath}", model.Id, metadataFilePath);
+                // Verify that the model directory and files actually exist
+                if (!string.IsNullOrEmpty(model.LocalPath) && Directory.Exists(model.LocalPath))
+                {
+                    // Check if the directory contains actual model files
+                    if (FileSystemHelper.ContainsModelFiles(model.LocalPath) ||
+                        model.FilePaths.Any(fp => File.Exists(Path.Combine(model.LocalPath, fp))))
+                    {
+                        _logger.LogDebug("Loaded model {ModelId} from {FilePath}", model.Id, metadataFilePath);
+                        return model;
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Model {ModelId} metadata exists but no model files found in {LocalPath}",
+                            model.Id, model.LocalPath);
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("Model {ModelId} metadata exists but directory {LocalPath} not found",
+                        model.Id, model.LocalPath);
+                }
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load model metadata from {FilePath}", metadataFilePath);
         }
+
+        return null;
     }
 
     /// <summary>

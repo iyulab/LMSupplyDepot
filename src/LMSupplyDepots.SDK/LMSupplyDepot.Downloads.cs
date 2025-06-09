@@ -51,18 +51,11 @@ public partial class LMSupplyDepot
     }
 
     /// <summary>
-    /// Gets the current status of a model download (simple status only)
-    /// </summary>
-    public async Task<ModelDownloadStatus?> GetDownloadStatusAsync(string modelKey, CancellationToken cancellationToken = default)
-    {
-        string modelId = await ModelManager.ResolveModelKeyAsync(modelKey, cancellationToken);
-        return ModelManager.GetDownloadStatus(modelId);
-    }
-
-    /// <summary>
     /// Gets detailed download progress including status, size, and timing information
     /// </summary>
-    public async Task<ModelDownloadProgress?> GetDownloadProgressAsync(string modelKey, CancellationToken cancellationToken = default)
+    public async Task<ModelDownloadProgress?> GetDownloadProgressAsync(
+        string modelKey,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -73,13 +66,13 @@ public partial class LMSupplyDepot
             var allDownloads = await ModelManager.GetAllDownloadsAsync(cancellationToken);
             var repository = _serviceProvider.GetRequiredService<IModelRepository>();
 
-            return await DownloadStatusHelper.CreateDetailedProgressAsync(
+            return await DownloadProgressCalculator.CreateDetailedProgressAsync(
                 modelId, status, progress, repository, allDownloads, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get download progress for {ModelKey}", modelKey);
-            return ModelDownloadProgress.CreateFailed(modelKey, "", 0, null, ex.Message);
+            return DownloadProgressCalculator.CreateNotFoundProgress(modelKey);
         }
     }
 

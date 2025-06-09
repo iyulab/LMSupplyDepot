@@ -5,7 +5,6 @@ namespace LMSupplyDepots.SDK;
 /// </summary>
 public partial class LMSupplyDepot
 {
-
     /// <summary>
     /// Downloads a specific model artifact from an external source
     /// </summary>
@@ -52,7 +51,7 @@ public partial class LMSupplyDepot
     }
 
     /// <summary>
-    /// Gets the current status of a model download
+    /// Gets the current status of a model download (simple status only)
     /// </summary>
     public async Task<ModelDownloadStatus?> GetDownloadStatusAsync(string modelKey, CancellationToken cancellationToken = default)
     {
@@ -61,12 +60,27 @@ public partial class LMSupplyDepot
     }
 
     /// <summary>
-    /// Gets download progress information
+    /// Gets detailed download progress including status, size, and timing information
     /// </summary>
     public async Task<ModelDownloadProgress?> GetDownloadProgressAsync(string modelKey, CancellationToken cancellationToken = default)
     {
-        string modelId = await ModelManager.ResolveModelKeyAsync(modelKey, cancellationToken);
-        return ModelManager.GetDownloadProgress(modelId);
+        try
+        {
+            string modelId = await ModelManager.ResolveModelKeyAsync(modelKey, cancellationToken);
+
+            var status = ModelManager.GetDownloadStatus(modelId);
+            var progress = ModelManager.GetDownloadProgress(modelId);
+            var allDownloads = await ModelManager.GetAllDownloadsAsync(cancellationToken);
+            var repository = _serviceProvider.GetRequiredService<IModelRepository>();
+
+            return await DownloadStatusHelper.CreateDetailedProgressAsync(
+                modelId, status, progress, repository, allDownloads, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get download progress for {ModelKey}", modelKey);
+            return ModelDownloadProgress.CreateFailed(modelKey, "", 0, null, ex.Message);
+        }
     }
 
     /// <summary>
@@ -76,5 +90,4 @@ public partial class LMSupplyDepot
     {
         return await ModelManager.GetAllDownloadsAsync(cancellationToken);
     }
-
 }

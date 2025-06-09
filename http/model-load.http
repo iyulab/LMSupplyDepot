@@ -106,7 +106,3 @@ Content-Type: application/json
 {
   "model": "embedding-model"
 }
-
-### Get all currently loaded models
-GET {{apiBase}}/loaded
-Accept: application/json

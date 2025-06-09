@@ -246,10 +246,48 @@ public partial class HuggingFaceDownloader
         var targetDirectory = GetModelDirectoryPath(identifier);
         if (Directory.Exists(targetDirectory))
         {
+            // First, get the list of files that are being downloaded
+            var downloadStateFiles = Directory.GetFiles(targetDirectory, "*.download");
+            var filesToDelete = new List<string>();
+
+            // Collect the actual files being downloaded (without .download extension)
+            foreach (var downloadFile in downloadStateFiles)
+            {
+                try
+                {
+                    var actualFileName = Path.GetFileNameWithoutExtension(downloadFile);
+                    var actualFilePath = Path.Combine(targetDirectory, actualFileName);
+                    if (File.Exists(actualFilePath))
+                    {
+                        filesToDelete.Add(actualFilePath);
+                        _logger.LogInformation("File {FileName} download was cancelled", actualFileName);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error processing download state file {DownloadFile}", downloadFile);
+                }
+            }
+
+            // Remove download state files first
             DownloadStateHelper.RemoveAllDownloadStateFiles(sourceId, targetDirectory);
 
-            var files = Directory.GetFiles(targetDirectory);
-            if (files.Length == 0 || files.All(f =>
+            // Wait a bit for file handles to be released
+            if (filesToDelete.Count > 0)
+            {
+                _logger.LogInformation("Waiting for file handles to be released before cleanup...");
+                await Task.Delay(1000, cancellationToken);
+            }
+
+            // Delete the actual partial files with retry mechanism
+            foreach (var fileToDelete in filesToDelete)
+            {
+                await DeleteFileWithRetryAsync(fileToDelete, cancellationToken);
+            }
+
+            // Check if directory should be removed
+            var remainingFiles = Directory.GetFiles(targetDirectory);
+            if (remainingFiles.Length == 0 || remainingFiles.All(f =>
                 Path.GetExtension(f).ToLowerInvariant() is ".download" or ".part" or ".tmp"))
             {
                 try
@@ -260,6 +298,47 @@ public partial class HuggingFaceDownloader
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Could not delete directory for model {ModelId}", sourceId);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Attempts to delete a file with retry mechanism
+    /// </summary>
+    private async Task DeleteFileWithRetryAsync(string filePath, CancellationToken cancellationToken)
+    {
+        const int maxRetries = 5;
+        const int delayMs = 500;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                File.Delete(filePath);
+                _logger.LogInformation("Deleted partial download file: {FilePath}", filePath);
+                return;
+            }
+            catch (IOException ex) when (attempt < maxRetries)
+            {
+                _logger.LogWarning("Attempt {Attempt}/{MaxRetries} to delete file {FilePath} failed: {Error}. Retrying in {DelayMs}ms...",
+                    attempt, maxRetries, filePath, ex.Message, delayMs);
+
+                await Task.Delay(delayMs * attempt, cancellationToken); // Exponential backoff
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not delete partial file {FilePath} on attempt {Attempt}/{MaxRetries}",
+                    filePath, attempt, maxRetries);
+
+                if (attempt == maxRetries)
+                {
+                    _logger.LogError("Failed to delete file {FilePath} after {MaxRetries} attempts. File may be locked.",
+                        filePath, maxRetries);
+                }
+                else
+                {
+                    await Task.Delay(delayMs * attempt, cancellationToken);
                 }
             }
         }

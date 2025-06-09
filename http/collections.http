@@ -1,10 +1,10 @@
 # # LMSupplyDepot
-# @baseUrl = http://localhost:5181
-# @apiBase = {{baseUrl}}/api
+@baseUrl = http://localhost:5181
+@apiBase = {{baseUrl}}/api
 
 # Filer Proxy
-@baseUrl = http://localhost:27010
-@apiBase = {{baseUrl}}/lm/api
+# @baseUrl = http://localhost:27010
+# @apiBase = {{baseUrl}}/lm/api
 
 ### Discover model collections
 GET {{apiBase}}/collections/discover

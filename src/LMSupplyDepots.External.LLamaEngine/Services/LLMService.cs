@@ -167,23 +167,33 @@ public class LLMService : ILLMService, IAsyncDisposable
     {
         try
         {
-            await _inferLock.WaitAsync(cancellationToken);
-
-            int retryCount = 0;
+            await _inferLock.WaitAsync(cancellationToken); int retryCount = 0;
             while (true)
             {
                 try
                 {
                     ThrowIfDisposed();
-                    var (_, modelParams) = await GetExecutorWithRetryAsync(modelIdentifier, cancellationToken);
-                    modelParams.Embeddings = true;
+                    modelIdentifier = _modelManager.NormalizeModelIdentifier(modelIdentifier);
 
-                    if (!_loadedModels.TryGetValue(modelIdentifier, out var resources))
+                    // Get model info and weights
+                    var info = await _modelManager.GetModelInfoAsync(modelIdentifier);
+                    if (info?.State != LocalModelState.Loaded)
                     {
-                        throw new InvalidOperationException($"Model resources not found for {modelIdentifier}");
+                        throw new InvalidOperationException($"Model {modelIdentifier} is not loaded");
                     }
 
-                    using var embedder = new LLamaEmbedder(resources.Weights, modelParams);
+                    var weights = _modelManager.GetModelWeights(modelIdentifier);
+                    if (weights is null)
+                    {
+                        throw new InvalidOperationException($"Model weights not found for {modelIdentifier}");
+                    }
+
+                    var modelParams = _backendService.GetOptimalModelParams(info.FullPath);
+                    modelParams.Embeddings = true;
+                    // For embeddings, batch size must equal ubatch size
+                    modelParams.UBatchSize = modelParams.BatchSize;
+
+                    using var embedder = new LLamaEmbedder(weights, modelParams);
                     var embeddings = await embedder.GetEmbeddings(text);
 
                     if (embeddings.Count == 0)

@@ -371,3 +371,4 @@ FodyWeavers.xsd
 output/
 /src/LMSupplyDepots.External.OpenAI.SampleConsoleApp/secrets.json
 /src/LMSupplyDepots.External.OpenAI.SampleConsoleApp/secrets.json
+.github/copilot-instructions.md

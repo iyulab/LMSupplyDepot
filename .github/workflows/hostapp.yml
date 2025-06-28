@@ -4,7 +4,7 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'hostapp_v*'  # e.g., hostapp_v0.1.0
+      - 'hostapp_v*'
 
 jobs:
   build-and-release:
@@ -32,9 +32,7 @@ jobs:
       
     - name: Build and Publish
       run: |
-        dotnet publish src/LMSupplyDepots.HostApp/LMSupplyDepots.HostApp.csproj `
-          -c Release `
-          -o output/host-app
+        dotnet publish src/LMSupplyDepots.HostApp/LMSupplyDepots.HostApp.csproj -c Release -o output/host-app
     
     - name: Get version from tag
       id: version
@@ -74,36 +72,29 @@ jobs:
         $platforms = '${{ steps.platforms.outputs.PLATFORMS }}' | ConvertFrom-Json
         $zipFiles = @()
         
-        # Create base directory structure for each platform
         foreach ($platform in $platforms) {
           $platformDir = "output/platform-$platform"
           New-Item -ItemType Directory -Path $platformDir -Force | Out-Null
           
-          # Copy main application files (excluding runtimes)
           Get-ChildItem -Path "output/host-app" -Exclude "runtimes" | Copy-Item -Destination $platformDir -Recurse -Force
           
-          # Copy platform-specific runtime files
           $runtimeSource = "output/host-app/runtimes/$platform"
-          $runtimeDest = "$platformDir/runtimes/$platform"
           if (Test-Path $runtimeSource) {
             New-Item -ItemType Directory -Path "$platformDir/runtimes" -Force | Out-Null
             Copy-Item -Path $runtimeSource -Destination "$platformDir/runtimes" -Recurse -Force
           }
           
-          # Create ZIP file for this platform
           $zipFile = "LMSupplyDepots.HostApp-v$version-$platform.zip"
           Compress-Archive -Path "$platformDir/*" -DestinationPath $zipFile -Force
           $zipFiles += $zipFile
           
-          echo "Created ZIP for $platform`: $zipFile"
+          echo "Created ZIP for $platform : $zipFile"
         }
         
-        # Also create a full ZIP with all platforms (original behavior)
         $fullZipFile = "LMSupplyDepots.HostApp-v$version-all-platforms.zip"
         Compress-Archive -Path "output/host-app/*" -DestinationPath $fullZipFile -Force
         $zipFiles += $fullZipFile
         
-        # Convert array to JSON for output
         $zipFilesJson = $zipFiles | ConvertTo-Json -Compress
         echo "ZIP_FILES=$zipFilesJson" >> $env:GITHUB_OUTPUT
         echo "All ZIP files created: $($zipFiles -join ', ')"
@@ -120,18 +111,16 @@ jobs:
         Write-Host "Version: $version"
         Write-Host "Platforms: $($platforms -join ', ')"
         
-        # Check if SAS token is available
         if ([string]::IsNullOrEmpty($sasToken)) {
-          Write-Host "✗ AZURE_SAS_TOKEN secret is not set"
+          Write-Host "AZURE_SAS_TOKEN secret is not set"
           exit 1
         }
         
         if (-not $sasToken.StartsWith("?")) {
-          Write-Host "✗ AZURE_SAS_TOKEN should start with '?' character"
+          Write-Host "AZURE_SAS_TOKEN should start with ? character"
           exit 1
         }
         
-        # Upload each platform-specific ZIP directly as publish.zip
         foreach ($platform in $platforms) {
           $zipFile = "LMSupplyDepots.HostApp-v$version-$platform.zip"
           $publishUrl = "$baseUrl/publish/lm-host/$platform/publish.zip$sasToken"
@@ -142,22 +131,20 @@ jobs:
           if (Test-Path $zipFile) {
             Write-Host "Uploading $zipFile as publish.zip for platform $platform..."
             
-            # Upload ZIP file directly as publish.zip
             try {
               Invoke-RestMethod -Uri $publishUrl -Method PUT -InFile $zipFile -ContentType "application/zip" -Headers @{
                 "x-ms-blob-type" = "BlockBlob"
               }
-              Write-Host "✓ Successfully uploaded $zipFile as publish.zip"
+              Write-Host "Successfully uploaded $zipFile as publish.zip"
             } catch {
-              Write-Host "✗ Failed to upload ${zipFile}: $($_.Exception.Message)"
+              Write-Host "Failed to upload $zipFile : $($_.Exception.Message)"
               exit 1
             }
           } else {
-            Write-Host "⚠ ZIP file not found: $zipFile"
+            Write-Host "ZIP file not found: $zipFile"
           }
         }
         
-        # Upload the all-platforms version
         $allPlatformsZip = "LMSupplyDepots.HostApp-v$version-all-platforms.zip"
         if (Test-Path $allPlatformsZip) {
           $allPlatformsUrl = "$baseUrl/publish/lm-host/all-platforms/publish.zip$sasToken"
@@ -168,14 +155,13 @@ jobs:
             Invoke-RestMethod -Uri $allPlatformsUrl -Method PUT -InFile $allPlatformsZip -ContentType "application/zip" -Headers @{
               "x-ms-blob-type" = "BlockBlob"
             }
-            Write-Host "✓ Successfully uploaded all-platforms ZIP as publish.zip"
+            Write-Host "Successfully uploaded all-platforms ZIP as publish.zip"
           } catch {
-            Write-Host "✗ Failed to upload all-platforms ZIP: $($_.Exception.Message)"
+            Write-Host "Failed to upload all-platforms ZIP: $($_.Exception.Message)"
             exit 1
           }
         }
         
-        # Upload global version.txt for the entire lm-host project
         $globalVersionUrl = "$baseUrl/publish/lm-host/version.txt$sasToken"
         Write-Host "Uploading global version.txt to publish/lm-host/version.txt..."
         
@@ -184,18 +170,15 @@ jobs:
           Invoke-RestMethod -Uri $globalVersionUrl -Method PUT -Body $versionContent -ContentType "text/plain" -Headers @{
             "x-ms-blob-type" = "BlockBlob"
           }
-          Write-Host "✓ Successfully uploaded global version.txt ($version)"
+          Write-Host "Successfully uploaded global version.txt ($version)"
         } catch {
-          Write-Host "✗ Failed to upload global version.txt: $($_.Exception.Message)"
+          Write-Host "Failed to upload global version.txt: $($_.Exception.Message)"
           exit 1
         }
         
-        Write-Host "========================================="
         Write-Host "Azure Storage upload completed successfully!"
         Write-Host "Uploaded platforms: $($platforms -join ', ')"
         Write-Host "Version: $version"
-        Write-Host "Global version file: https://grsiyustorage.blob.core.windows.net/filer-ai/publish/lm-host/version.txt"
-        Write-Host "========================================="
       shell: powershell
       env:
         AZURE_SAS_TOKEN: ${{ secrets.AZURE_SAS_TOKEN }}
@@ -206,12 +189,10 @@ jobs:
         $version = "${{ steps.version.outputs.VERSION }}"
         $platforms = '${{ steps.platforms.outputs.PLATFORMS }}' | ConvertFrom-Json
         
-        # Build download links section
         $downloadLinks = @()
         $downloadLinks += "### Downloads"
         $downloadLinks += ""
         
-        # Add platform-specific downloads
         foreach ($platform in $platforms) {
           $friendlyName = switch ($platform) {
             "win-x64" { "Windows x64" }
@@ -222,19 +203,18 @@ jobs:
             "osx-arm64" { "macOS ARM64 (Apple Silicon)" }
             default { $platform }
           }
-          $downloadLinks += "- **$friendlyName**: ``LMSupplyDepots.HostApp-v$version-$platform.zip``"
+          $downloadLinks += "- **$friendlyName**: LMSupplyDepots.HostApp-v$version-$platform.zip"
         }
         
-        $downloadLinks += "- **All Platforms**: ``LMSupplyDepots.HostApp-v$version-all-platforms.zip``"
+        $downloadLinks += "- **All Platforms**: LMSupplyDepots.HostApp-v$version-all-platforms.zip"
         $downloadLinks += ""
         
-        # Create release notes content
         $notes = "## LMSupplyDepots HostApp v$version`n`n"
         $notes += ($downloadLinks -join "`n") + "`n`n"
         $notes += "### Installation Instructions`n"
         $notes += "1. Download the appropriate ZIP file for your platform`n"
         $notes += "2. Extract the ZIP file to your desired location`n"
-        $notes += "3. Run ``LMSupplyDepots.HostApp.exe`` (Windows) or the appropriate executable`n`n"
+        $notes += "3. Run LMSupplyDepots.HostApp.exe (Windows) or the appropriate executable`n`n"
         $notes += "### Platform Support`n"
         $notes += "This release includes optimized builds for the following platforms:`n"
         $notes += ($platforms | ForEach-Object { "- $_" }) -join "`n"
@@ -242,30 +222,11 @@ jobs:
         $notes += "- .NET 9.0 Runtime required for your platform`n"
         $notes += "- Supported architectures: x64, ARM64`n"
         $notes += "- Operating Systems: Windows 10/11, Linux (glibc/musl), macOS 10.15+`n`n"
-        $notes += "### Hardware Acceleration Support`n"
-        $notes += "- **CUDA**: CUDA 11.x and 12.x support included`n"
-        $notes += "- **Vulkan**: Cross-platform GPU acceleration`n"
-        $notes += "- **Metal**: macOS GPU acceleration (ARM64)`n"
-        $notes += "- **AVX/AVX2/AVX512**: CPU optimization variants`n`n"
-        $notes += "### What's New`n"
-        $notes += "- Latest code changes and improvements`n"
-        $notes += "- Bug fixes and stability enhancements`n"
-        $notes += "- Performance optimizations`n"
-        $notes += "- Multi-platform native library support`n`n"
-        $notes += "### Choosing the Right Download`n"
-        $notes += "- **Windows users**: Download the ``win-x64`` version`n"
-        $notes += "- **Linux users**: Download ``linux-x64`` (standard) or ``linux-musl-x64`` (Alpine/musl)`n"
-        $notes += "- **macOS Intel**: Download ``osx-x64`` version`n"
-        $notes += "- **macOS Apple Silicon**: Download ``osx-arm64`` version`n"
-        $notes += "- **ARM Linux**: Download ``linux-arm64`` version`n"
-        $notes += "- **Unsure**: Download the ``all-platforms`` version (larger file size)`n`n"
         $notes += "### Support`n"
         $notes += "If you encounter any issues, please create an issue in this repository."
         
-        # Write to file with proper encoding
         [System.IO.File]::WriteAllText("release_notes.txt", $notes, [System.Text.UTF8Encoding]::new($false))
         
-        # Set output for GitHub Actions
         echo "RELEASE_NOTES<<EOF" >> $env:GITHUB_OUTPUT
         Get-Content -Path release_notes.txt -Raw | ForEach-Object { $_ -split "`n" } | ForEach-Object { echo $_ >> $env:GITHUB_OUTPUT }
         echo "EOF" >> $env:GITHUB_OUTPUT
@@ -302,13 +263,10 @@ jobs:
     - name: Success notification
       run: |
         $zipFiles = '${{ steps.zip.outputs.ZIP_FILES }}' | ConvertFrom-Json
-        echo "========================================="
         echo "Release v${{ steps.version.outputs.VERSION }} created successfully!"
         echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.TAG }}"
         echo "ZIP Files created:"
         foreach ($zipFile in $zipFiles) {
           echo "  - $zipFile"
         }
-        echo ""
         echo "Azure Storage uploads completed for all platforms"
-        echo "========================================="

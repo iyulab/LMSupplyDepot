@@ -108,6 +108,101 @@ jobs:
         echo "ZIP_FILES=$zipFilesJson" >> $env:GITHUB_OUTPUT
         echo "All ZIP files created: $($zipFiles -join ', ')"
       shell: powershell
+
+    - name: Upload to Azure Storage
+      run: |
+        $version = "${{ steps.version.outputs.VERSION }}"
+        $platforms = '${{ steps.platforms.outputs.PLATFORMS }}' | ConvertFrom-Json
+        $baseUrl = "https://grsiyustorage.blob.core.windows.net/filer-ai"
+        $sasToken = "?sv=2023-01-03&st=2025-04-04T06%3A13%3A35Z&se=2029-12-31T06%3A13%3A00Z&sr=c&sp=racwdxltf&sig=gIwiAIKa14jwmVKdXixch5LGH%2BE6C%2FwW9%2FzuUldWNp4%3D"
+        
+        echo "Starting Azure Storage upload..."
+        
+        # Upload each platform-specific ZIP
+        foreach ($platform in $platforms) {
+          $zipFile = "LMSupplyDepots.HostApp-v$version-$platform.zip"
+          $publishUrl = "$baseUrl/publish/lm-host/$platform/publish.zip$sasToken"
+          $versionUrl = "$baseUrl/publish/lm-host/$platform/version.txt$sasToken"
+          
+          if (Test-Path $zipFile) {
+            echo "Uploading $zipFile to Azure Storage for platform $platform..."
+            
+            # Upload ZIP file
+            try {
+              Invoke-RestMethod -Uri $publishUrl -Method PUT -InFile $zipFile -ContentType "application/zip" -Headers @{
+                "x-ms-blob-type" = "BlockBlob"
+              }
+              echo "✓ Successfully uploaded $zipFile"
+            } catch {
+              echo "✗ Failed to upload $zipFile`: $_"
+              exit 1
+            }
+            
+            # Create and upload version.txt
+            $versionContent = "v$version"
+            $versionFile = "version-$platform.txt"
+            [System.IO.File]::WriteAllText($versionFile, $versionContent, [System.Text.UTF8Encoding]::new($false))
+            
+            try {
+              Invoke-RestMethod -Uri $versionUrl -Method PUT -InFile $versionFile -ContentType "text/plain" -Headers @{
+                "x-ms-blob-type" = "BlockBlob"
+              }
+              echo "✓ Successfully uploaded version.txt for $platform (v$version)"
+            } catch {
+              echo "✗ Failed to upload version.txt for $platform`: $_"
+              exit 1
+            }
+            
+            # Clean up temporary version file
+            Remove-Item $versionFile -Force -ErrorAction SilentlyContinue
+          } else {
+            echo "⚠ ZIP file not found: $zipFile"
+          }
+        }
+        
+        # Also upload the all-platforms version to a special path
+        $allPlatformsZip = "LMSupplyDepots.HostApp-v$version-all-platforms.zip"
+        if (Test-Path $allPlatformsZip) {
+          $allPlatformsUrl = "$baseUrl/publish/lm-host/all-platforms/publish.zip$sasToken"
+          $allVersionUrl = "$baseUrl/publish/lm-host/all-platforms/version.txt$sasToken"
+          
+          echo "Uploading all-platforms ZIP to Azure Storage..."
+          
+          try {
+            Invoke-RestMethod -Uri $allPlatformsUrl -Method PUT -InFile $allPlatformsZip -ContentType "application/zip" -Headers @{
+              "x-ms-blob-type" = "BlockBlob"
+            }
+            echo "✓ Successfully uploaded all-platforms ZIP"
+          } catch {
+            echo "✗ Failed to upload all-platforms ZIP: $_"
+            exit 1
+          }
+          
+          # Create and upload version.txt for all-platforms
+          $versionContent = "v$version"
+          $allVersionFile = "version-all-platforms.txt"
+          [System.IO.File]::WriteAllText($allVersionFile, $versionContent, [System.Text.UTF8Encoding]::new($false))
+          
+          try {
+            Invoke-RestMethod -Uri $allVersionUrl -Method PUT -InFile $allVersionFile -ContentType "text/plain" -Headers @{
+              "x-ms-blob-type" = "BlockBlob"
+            }
+            echo "✓ Successfully uploaded version.txt for all-platforms (v$version)"
+          } catch {
+            echo "✗ Failed to upload version.txt for all-platforms: $_"
+            exit 1
+          }
+          
+          # Clean up temporary version file
+          Remove-Item $allVersionFile -Force -ErrorAction SilentlyContinue
+        }
+        
+        echo "========================================="
+        echo "Azure Storage upload completed successfully!"
+        echo "Uploaded platforms: $($platforms -join ', ')"
+        echo "Version: v$version"
+        echo "========================================="
+      shell: powershell
       
     - name: Generate Release Notes
       id: notes
@@ -135,6 +230,25 @@ jobs:
         }
         
         $downloadLinks += "- **All Platforms**: ``LMSupplyDepots.HostApp-v$version-all-platforms.zip``"
+        $downloadLinks += ""
+        
+        # Add Azure Storage download links
+        $downloadLinks += "### Azure Storage Downloads"
+        $downloadLinks += "Builds are also available on Azure Storage:"
+        $downloadLinks += ""
+        foreach ($platform in $platforms) {
+          $friendlyName = switch ($platform) {
+            "win-x64" { "Windows x64" }
+            "linux-x64" { "Linux x64" }
+            "linux-arm64" { "Linux ARM64" }
+            "linux-musl-x64" { "Linux x64 (Alpine/musl)" }
+            "osx-x64" { "macOS x64 (Intel)" }
+            "osx-arm64" { "macOS ARM64 (Apple Silicon)" }
+            default { $platform }
+          }
+          $downloadLinks += "- **$friendlyName**: https://grsiyustorage.blob.core.windows.net/filer-ai/publish/lm-host/$platform/publish.zip"
+        }
+        $downloadLinks += "- **All Platforms**: https://grsiyustorage.blob.core.windows.net/filer-ai/publish/lm-host/all-platforms/publish.zip"
         $downloadLinks += ""
         
         $notes = @"
@@ -227,4 +341,6 @@ jobs:
         foreach ($zipFile in $zipFiles) {
           echo "  - $zipFile"
         }
+        echo ""
+        echo "Azure Storage uploads completed for all platforms"
         echo "========================================="

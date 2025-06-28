@@ -154,9 +154,9 @@ jobs:
               exit 1
             }
             
-            # Create and upload version.txt - 이 부분을 수정
-            $versionContent = "$version"  # 변수 할당 수정
-            $versionFile = "version-$platform.txt"  # 변수 할당 수정
+            # Create and upload version.txt
+            $versionContent = "$version"
+            $versionFile = "version-$platform.txt"
             Write-Host "Creating version file: $versionFile with content: $versionContent"
             
             try {

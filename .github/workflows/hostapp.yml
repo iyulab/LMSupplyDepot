@@ -228,48 +228,39 @@ jobs:
         $downloadLinks += "- **All Platforms**: ``LMSupplyDepots.HostApp-v$version-all-platforms.zip``"
         $downloadLinks += ""
         
-        $notes = @"
-        ## LMSupplyDepots HostApp v$version
-        
-        $($downloadLinks -join "`n")
-        
-        ### Installation Instructions
-        1. Download the appropriate ZIP file for your platform
-        2. Extract the ZIP file to your desired location
-        3. Run ``LMSupplyDepots.HostApp.exe`` (Windows) or the appropriate executable
-        
-        ### Platform Support
-        This release includes optimized builds for the following platforms:
-        $($platforms | ForEach-Object { "- $_" } | Out-String)
-        
-        ### System Requirements
-        - .NET 9.0 Runtime required for your platform
-        - Supported architectures: x64, ARM64
-        - Operating Systems: Windows 10/11, Linux (glibc/musl), macOS 10.15+
-        
-        ### Hardware Acceleration Support
-        - **CUDA**: CUDA 11.x and 12.x support included
-        - **Vulkan**: Cross-platform GPU acceleration
-        - **Metal**: macOS GPU acceleration (ARM64)
-        - **AVX/AVX2/AVX512**: CPU optimization variants
-        
-        ### What's New
-        - Latest code changes and improvements
-        - Bug fixes and stability enhancements
-        - Performance optimizations
-        - Multi-platform native library support
-        
-        ### Choosing the Right Download
-        - **Windows users**: Download the ``win-x64`` version
-        - **Linux users**: Download ``linux-x64`` (standard) or ``linux-musl-x64`` (Alpine/musl)
-        - **macOS Intel**: Download ``osx-x64``
-        - **macOS Apple Silicon**: Download ``osx-arm64``
-        - **ARM Linux**: Download ``linux-arm64``
-        - **Unsure**: Download the ``all-platforms`` version (larger file size)
-        
-        ### Support
-        If you encounter any issues, please create an issue in this repository.
-        "@
+        # Create release notes content
+        $notes = "## LMSupplyDepots HostApp v$version`n`n"
+        $notes += ($downloadLinks -join "`n") + "`n`n"
+        $notes += "### Installation Instructions`n"
+        $notes += "1. Download the appropriate ZIP file for your platform`n"
+        $notes += "2. Extract the ZIP file to your desired location`n"
+        $notes += "3. Run ``LMSupplyDepots.HostApp.exe`` (Windows) or the appropriate executable`n`n"
+        $notes += "### Platform Support`n"
+        $notes += "This release includes optimized builds for the following platforms:`n"
+        $notes += ($platforms | ForEach-Object { "- $_" }) -join "`n"
+        $notes += "`n`n### System Requirements`n"
+        $notes += "- .NET 9.0 Runtime required for your platform`n"
+        $notes += "- Supported architectures: x64, ARM64`n"
+        $notes += "- Operating Systems: Windows 10/11, Linux (glibc/musl), macOS 10.15+`n`n"
+        $notes += "### Hardware Acceleration Support`n"
+        $notes += "- **CUDA**: CUDA 11.x and 12.x support included`n"
+        $notes += "- **Vulkan**: Cross-platform GPU acceleration`n"
+        $notes += "- **Metal**: macOS GPU acceleration (ARM64)`n"
+        $notes += "- **AVX/AVX2/AVX512**: CPU optimization variants`n`n"
+        $notes += "### What's New`n"
+        $notes += "- Latest code changes and improvements`n"
+        $notes += "- Bug fixes and stability enhancements`n"
+        $notes += "- Performance optimizations`n"
+        $notes += "- Multi-platform native library support`n`n"
+        $notes += "### Choosing the Right Download`n"
+        $notes += "- **Windows users**: Download the ``win-x64`` version`n"
+        $notes += "- **Linux users**: Download ``linux-x64`` (standard) or ``linux-musl-x64`` (Alpine/musl)`n"
+        $notes += "- **macOS Intel**: Download ``osx-x64`` version`n"
+        $notes += "- **macOS Apple Silicon**: Download ``osx-arm64`` version`n"
+        $notes += "- **ARM Linux**: Download ``linux-arm64`` version`n"
+        $notes += "- **Unsure**: Download the ``all-platforms`` version (larger file size)`n`n"
+        $notes += "### Support`n"
+        $notes += "If you encounter any issues, please create an issue in this repository."
         
         # Write to file with proper encoding
         [System.IO.File]::WriteAllText("release_notes.txt", $notes, [System.Text.UTF8Encoding]::new($false))

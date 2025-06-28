@@ -4,6 +4,9 @@ using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add health checks
+builder.Services.AddHealthChecks();
+
 // Add host services
 builder.Services.AddLMSupplyDepots(options =>
 {
@@ -48,8 +51,10 @@ else
 
 app.UseCors("AllowAll");
 
-// Simple health check endpoint
+// Health check endpoints
 app.MapGet("/", () => new { status = "running", service = "LMSupplyDepots API" });
+app.MapHealthChecks("/healthz");
+app.MapHealthChecks("/health");
 
 // Global error handler for non-controller code
 app.Map("/error", (HttpContext httpContext) =>

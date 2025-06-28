@@ -135,7 +135,6 @@ jobs:
         foreach ($platform in $platforms) {
           $zipFile = "LMSupplyDepots.HostApp-v$version-$platform.zip"
           $publishUrl = "$baseUrl/publish/lm-host/$platform/publish.zip$sasToken"
-          $versionUrl = "$baseUrl/publish/lm-host/$platform/version.txt$sasToken"
           
           Write-Host "Processing platform: $platform"
           Write-Host "ZIP file: $zipFile"
@@ -153,18 +152,6 @@ jobs:
               Write-Host "✗ Failed to upload ${zipFile}: $($_.Exception.Message)"
               exit 1
             }
-            
-            # Create and upload version.txt directly to Azure Storage (no local file needed)
-            try {
-              $versionContent = [System.Text.Encoding]::UTF8.GetBytes($version)
-              Invoke-RestMethod -Uri $versionUrl -Method PUT -Body $versionContent -ContentType "text/plain" -Headers @{
-                "x-ms-blob-type" = "BlockBlob"
-              }
-              Write-Host "✓ Successfully uploaded version.txt for $platform ($version)"
-            } catch {
-              Write-Host "✗ Failed to upload version.txt for ${platform}: $($_.Exception.Message)"
-              exit 1
-            }
           } else {
             Write-Host "⚠ ZIP file not found: $zipFile"
           }
@@ -174,7 +161,6 @@ jobs:
         $allPlatformsZip = "LMSupplyDepots.HostApp-v$version-all-platforms.zip"
         if (Test-Path $allPlatformsZip) {
           $allPlatformsUrl = "$baseUrl/publish/lm-host/all-platforms/publish.zip$sasToken"
-          $allVersionUrl = "$baseUrl/publish/lm-host/all-platforms/version.txt$sasToken"
           
           Write-Host "Uploading all-platforms ZIP as publish.zip..."
           
@@ -187,24 +173,28 @@ jobs:
             Write-Host "✗ Failed to upload all-platforms ZIP: $($_.Exception.Message)"
             exit 1
           }
-          
-          # Upload version.txt for all-platforms directly to Azure Storage
-          try {
-            $versionContent = [System.Text.Encoding]::UTF8.GetBytes($version)
-            Invoke-RestMethod -Uri $allVersionUrl -Method PUT -Body $versionContent -ContentType "text/plain" -Headers @{
-              "x-ms-blob-type" = "BlockBlob"
-            }
-            Write-Host "✓ Successfully uploaded version.txt for all-platforms ($version)"
-          } catch {
-            Write-Host "✗ Failed to upload version.txt for all-platforms: $($_.Exception.Message)"
-            exit 1
+        }
+        
+        # Upload global version.txt for the entire lm-host project
+        $globalVersionUrl = "$baseUrl/publish/lm-host/version.txt$sasToken"
+        Write-Host "Uploading global version.txt to publish/lm-host/version.txt..."
+        
+        try {
+          $versionContent = [System.Text.Encoding]::UTF8.GetBytes($version)
+          Invoke-RestMethod -Uri $globalVersionUrl -Method PUT -Body $versionContent -ContentType "text/plain" -Headers @{
+            "x-ms-blob-type" = "BlockBlob"
           }
+          Write-Host "✓ Successfully uploaded global version.txt ($version)"
+        } catch {
+          Write-Host "✗ Failed to upload global version.txt: $($_.Exception.Message)"
+          exit 1
         }
         
         Write-Host "========================================="
         Write-Host "Azure Storage upload completed successfully!"
         Write-Host "Uploaded platforms: $($platforms -join ', ')"
         Write-Host "Version: $version"
+        Write-Host "Global version file: https://grsiyustorage.blob.core.windows.net/filer-ai/publish/lm-host/version.txt"
         Write-Host "========================================="
       shell: powershell
       env:
@@ -236,25 +226,6 @@ jobs:
         }
         
         $downloadLinks += "- **All Platforms**: ``LMSupplyDepots.HostApp-v$version-all-platforms.zip``"
-        $downloadLinks += ""
-        
-        # Add Azure Storage download links
-        $downloadLinks += "### Azure Storage Downloads"
-        $downloadLinks += "Builds are also available on Azure Storage:"
-        $downloadLinks += ""
-        foreach ($platform in $platforms) {
-          $friendlyName = switch ($platform) {
-            "win-x64" { "Windows x64" }
-            "linux-x64" { "Linux x64" }
-            "linux-arm64" { "Linux ARM64" }
-            "linux-musl-x64" { "Linux x64 (Alpine/musl)" }
-            "osx-x64" { "macOS x64 (Intel)" }
-            "osx-arm64" { "macOS ARM64 (Apple Silicon)" }
-            default { $platform }
-          }
-          $downloadLinks += "- **$friendlyName**: https://grsiyustorage.blob.core.windows.net/filer-ai/publish/lm-host/$platform/publish.zip"
-        }
-        $downloadLinks += "- **All Platforms**: https://grsiyustorage.blob.core.windows.net/filer-ai/publish/lm-host/all-platforms/publish.zip"
         $downloadLinks += ""
         
         $notes = @"

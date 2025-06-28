@@ -131,7 +131,7 @@ jobs:
           exit 1
         }
         
-        # Upload each platform-specific ZIP
+        # Upload each platform-specific ZIP directly as publish.zip
         foreach ($platform in $platforms) {
           $zipFile = "LMSupplyDepots.HostApp-v$version-$platform.zip"
           $publishUrl = "$baseUrl/publish/lm-host/$platform/publish.zip$sasToken"
@@ -141,28 +141,23 @@ jobs:
           Write-Host "ZIP file: $zipFile"
           
           if (Test-Path $zipFile) {
-            Write-Host "Uploading $zipFile to Azure Storage for platform $platform..."
+            Write-Host "Uploading $zipFile as publish.zip for platform $platform..."
             
-            # Upload ZIP file
+            # Upload ZIP file directly as publish.zip
             try {
               Invoke-RestMethod -Uri $publishUrl -Method PUT -InFile $zipFile -ContentType "application/zip" -Headers @{
                 "x-ms-blob-type" = "BlockBlob"
               }
-              Write-Host "✓ Successfully uploaded $zipFile"
+              Write-Host "✓ Successfully uploaded $zipFile as publish.zip"
             } catch {
               Write-Host "✗ Failed to upload ${zipFile}: $($_.Exception.Message)"
               exit 1
             }
             
-            # Create and upload version.txt
-            $versionContent = "$version"
-            $versionFile = "version-$platform.txt"
-            Write-Host "Creating version file: $versionFile with content: $versionContent"
-            
+            # Create and upload version.txt directly to Azure Storage (no local file needed)
             try {
-              $versionContent | Out-File -FilePath $versionFile -Encoding UTF8 -NoNewline
-              
-              Invoke-RestMethod -Uri $versionUrl -Method PUT -InFile $versionFile -ContentType "text/plain" -Headers @{
+              $versionContent = [System.Text.Encoding]::UTF8.GetBytes($version)
+              Invoke-RestMethod -Uri $versionUrl -Method PUT -Body $versionContent -ContentType "text/plain" -Headers @{
                 "x-ms-blob-type" = "BlockBlob"
               }
               Write-Host "✓ Successfully uploaded version.txt for $platform ($version)"
@@ -170,56 +165,39 @@ jobs:
               Write-Host "✗ Failed to upload version.txt for ${platform}: $($_.Exception.Message)"
               exit 1
             }
-            
-            # Clean up temporary version file
-            if (Test-Path $versionFile) {
-              Remove-Item $versionFile -Force -ErrorAction SilentlyContinue
-              Write-Host "Cleaned up temporary file: $versionFile"
-            }
           } else {
             Write-Host "⚠ ZIP file not found: $zipFile"
           }
         }
         
-        # Also upload the all-platforms version to a special path
+        # Upload the all-platforms version
         $allPlatformsZip = "LMSupplyDepots.HostApp-v$version-all-platforms.zip"
         if (Test-Path $allPlatformsZip) {
           $allPlatformsUrl = "$baseUrl/publish/lm-host/all-platforms/publish.zip$sasToken"
           $allVersionUrl = "$baseUrl/publish/lm-host/all-platforms/version.txt$sasToken"
           
-          Write-Host "Uploading all-platforms ZIP to Azure Storage..."
+          Write-Host "Uploading all-platforms ZIP as publish.zip..."
           
           try {
             Invoke-RestMethod -Uri $allPlatformsUrl -Method PUT -InFile $allPlatformsZip -ContentType "application/zip" -Headers @{
               "x-ms-blob-type" = "BlockBlob"
             }
-            Write-Host "✓ Successfully uploaded all-platforms ZIP"
+            Write-Host "✓ Successfully uploaded all-platforms ZIP as publish.zip"
           } catch {
             Write-Host "✗ Failed to upload all-platforms ZIP: $($_.Exception.Message)"
             exit 1
           }
           
-          # Create and upload version.txt for all-platforms
-          $versionContent = "$version"
-          $allVersionFile = "version-all-platforms.txt"
-          Write-Host "Creating all-platforms version file: $allVersionFile with content: $versionContent"
-          
+          # Upload version.txt for all-platforms directly to Azure Storage
           try {
-            $versionContent | Out-File -FilePath $allVersionFile -Encoding UTF8 -NoNewline
-            
-            Invoke-RestMethod -Uri $allVersionUrl -Method PUT -InFile $allVersionFile -ContentType "text/plain" -Headers @{
+            $versionContent = [System.Text.Encoding]::UTF8.GetBytes($version)
+            Invoke-RestMethod -Uri $allVersionUrl -Method PUT -Body $versionContent -ContentType "text/plain" -Headers @{
               "x-ms-blob-type" = "BlockBlob"
             }
             Write-Host "✓ Successfully uploaded version.txt for all-platforms ($version)"
           } catch {
             Write-Host "✗ Failed to upload version.txt for all-platforms: $($_.Exception.Message)"
             exit 1
-          }
-          
-          # Clean up temporary version file
-          if (Test-Path $allVersionFile) {
-            Remove-Item $allVersionFile -Force -ErrorAction SilentlyContinue
-            Write-Host "Cleaned up temporary file: $allVersionFile"
           }
         }
         

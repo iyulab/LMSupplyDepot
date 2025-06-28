@@ -202,7 +202,7 @@ jobs:
           # Create and upload version.txt for all-platforms
           $versionContent = "$version"
           $allVersionFile = "version-all-platforms.txt"
-          Write-Host "Creating all-platforms version file: $allVersionFile"
+          Write-Host "Creating all-platforms version file: $allVersionFile with content: $versionContent"
           
           try {
             $versionContent | Out-File -FilePath $allVersionFile -Encoding UTF8 -NoNewline

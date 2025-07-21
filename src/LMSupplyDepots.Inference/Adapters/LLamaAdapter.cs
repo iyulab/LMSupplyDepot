@@ -61,6 +61,8 @@ public class LLamaAdapter : BaseModelAdapter
         Dictionary<string, object?>? parameters = null,
         CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("LLamaAdapter.LoadModelAsync called for model {ModelId}", model.Id);
+
         ThrowIfDisposed();
 
         if (!CanHandle(model))
@@ -71,10 +73,13 @@ public class LLamaAdapter : BaseModelAdapter
 
         try
         {
+            _logger.LogInformation("Starting model loading process for {ModelId}", model.Id);
+
             // Store the model in our local tracking
             _loadedModels[model.Id] = model;
 
             // Check if model is already loaded in LLama engine
+            _logger.LogInformation("Checking if model {ModelId} is already loaded in LLama engine", model.Id);
             var llmInfo = await _modelManager.GetModelInfoAsync(model.Id);
             if (llmInfo?.State == LocalModelState.Loaded)
             {
@@ -127,8 +132,13 @@ public class LLamaAdapter : BaseModelAdapter
 
             try
             {
+                _logger.LogInformation("Calling LLamaModelManager.LoadModelAsync for model {ModelId} from path {ModelPath}", model.Id, modelFilePath);
+
                 // 수정된 부분: LoadModelAsync 메서드는 2개의 인자만 받도록 수정
                 var loadedModel = await _modelManager.LoadModelAsync(modelFilePath, model.Id);
+
+                _logger.LogInformation("LLamaModelManager.LoadModelAsync returned for model {ModelId}. State: {State}, LastError: {LastError}",
+                    model.Id, loadedModel?.State, loadedModel?.LastError);
 
                 // Check if loaded successfully
                 if (loadedModel?.State != LocalModelState.Loaded)
@@ -142,6 +152,7 @@ public class LLamaAdapter : BaseModelAdapter
             }
             catch (Exception ex) when (ex is not ModelLoadException)
             {
+                _logger.LogError(ex, "Exception occurred while calling LLamaModelManager.LoadModelAsync for model {ModelId}", model.Id);
                 throw new ModelLoadException(model.Id, $"Error loading model: {ex.Message}", ex);
             }
         }

@@ -1,4 +1,7 @@
 using LMSupplyDepots.Inference.Services;
+using LMSupplyDepots.Inference.Adapters;
+using LMSupplyDepots.Inference.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace LMSupplyDepots.SDK;
 
@@ -245,9 +248,27 @@ public partial class LMSupplyDepot
     /// </summary>
     private void ConfigureModelLoaderServices(IServiceCollection services)
     {
-        // Register the RepositoryModelLoaderService that uses the already registered IModelRepository
-        services.AddSingleton<RepositoryModelLoaderService>();
+        _logger.LogInformation("Configuring ModelLoader services...");
+
+        // Register the RepositoryModelLoaderService that uses adapters to actually load models into engines
+        services.AddSingleton<RepositoryModelLoaderService>(sp =>
+        {
+            var repository = sp.GetRequiredService<IModelRepository>();
+            var logger = sp.GetRequiredService<ILogger<RepositoryModelLoaderService>>();
+            var adapters = sp.GetServices<BaseModelAdapter>().ToList();
+
+            logger.LogInformation("Creating RepositoryModelLoaderService with {AdapterCount} adapters", adapters.Count);
+            foreach (var adapter in adapters)
+            {
+                logger.LogInformation("Found adapter: {AdapterName} ({AdapterType})", adapter.AdapterName, adapter.GetType().Name);
+            }
+
+            return new RepositoryModelLoaderService(repository, logger, adapters);
+        });
+
         services.AddSingleton<IModelLoader>(sp => sp.GetRequiredService<RepositoryModelLoaderService>());
+
+        _logger.LogInformation("ModelLoader services configured");
     }
 
     /// <summary>

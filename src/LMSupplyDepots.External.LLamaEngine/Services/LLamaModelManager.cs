@@ -1,4 +1,4 @@
-﻿using LLama;
+using LLama;
 using LMSupplyDepots.External.LLamaEngine.Models;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;

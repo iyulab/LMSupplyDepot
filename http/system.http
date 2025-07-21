@@ -1,11 +1,13 @@
 ### System API Tests
 @baseUrl = http://localhost:5181
-@apiBase = {{baseUrl}}/api
 
 ### Get Health Information
-GET {{apiBase}}/health
+GET {{baseUrl}}/api/health
 Accept: application/json
 
 ### Get System Configuration
-GET {{apiBase}}/config
+GET {{baseUrl}}/api/config
 Accept: application/json
+
+#### 200 OK
+{"dataPath":"d:/filer-data","maxConcurrentDownloads":2,"maxConcurrentOperations":4,"enableModelCaching":true,"maxCachedModels":2,"forceCpuOnly":false}

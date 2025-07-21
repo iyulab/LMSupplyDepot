@@ -1,125 +1,346 @@
 # ### V1 API Tests (OpenAI Compatible)
-# @baseUrl = http://localhost:5181
-# @v1Base = {{baseUrl}}/v1
+@baseUrl = http://localhost:5181
 
 # Filer Proxy
-@baseUrl = http://localhost:27010
-@v1Base = {{baseUrl}}/lm/v1
+# @baseUrl = http://localhost:27010/lm
 
-@model = hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
-@alias = llama-3-8b
+@model = hf:unsloth/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-UD-IQ1_S
+@alias = alias13
 
-### List loaded models (shows alias if available, otherwise ID)
-GET {{v1Base}}/models
-Accept: application/json
+# ===========================================
+# SETUP: Model Management for Testing
+# ===========================================
 
-#### 200 OK
-{"models":[{"type":"text-generation","name":"llama-3-8b"}]}
-
-### Generate text with alias
-POST {{v1Base}}/chat/completions
+### Load model for testing
+POST {{baseUrl}}/api/models/load
 Content-Type: application/json
 
 {
-  "model": "{{alias}}",
-  "prompt": "Write a short poem about artificial intelligence.",
-  "max_tokens": 500,
-  "temperature": 0.7,
-  "top_p": 0.95,
-  "stream": false
+  "model": "{{model}}"
 }
 
-### Generate text with full model ID
-POST {{v1Base}}/chat/completions
+### Set alias for easier testing
+PUT {{baseUrl}}/api/alias
+Content-Type: application/json
+
+{
+  "name": "{{model}}",
+  "alias": "{{alias}}"
+}
+
+# ===========================================
+# OpenAI V1 API Tests
+# ===========================================
+
+### 1. List Models (OpenAI Compatible)
+GET {{baseUrl}}/v1/models
+Accept: application/json
+
+#### Expected Response Structure:
+# {
+#   "object": "list",
+#   "data": [
+#     {
+#       "id": "alias13",
+#       "object": "model", 
+#       "created": 1753052232,
+#       "owned_by": "local",
+#       "type": "text-generation"
+#     }
+#   ]
+# }
+
+### 2. Chat Completions - Basic Request
+POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
   "model": "{{model}}",
-  "prompt": "Explain machine learning in simple terms.",
-  "max_tokens": 300,
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is the capital of France?"
+    }
+  ],
+  "max_tokens": 50,
   "temperature": 0.7,
   "top_p": 0.95,
   "stream": false
 }
 
-### Generate text with streaming
-POST {{v1Base}}/chat/completions
+#### Expected Response Structure:
+# {
+#   "id": "chatcmpl-xxx",
+#   "object": "chat.completion",
+#   "created": 1753061806,
+#   "model": "alias13",
+#   "choices": [
+#     {
+#       "index": 0,
+#       "message": {
+#         "role": "assistant",
+#         "content": "Paris is the capital of France..."
+#       },
+#       "finish_reason": "stop"
+#     }
+#   ],
+#   "usage": {
+#     "prompt_tokens": 12,
+#     "completion_tokens": 31,
+#     "total_tokens": 43
+#   }
+# }
+
+### 3. Chat Completions - Multi-turn Conversation
+POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
   "model": "{{alias}}",
-  "prompt": "Write a short story about a robot who discovers emotions.",
-  "max_tokens": 1000,
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that answers questions about geography."
+    },
+    {
+      "role": "user",
+      "content": "What is the capital of France?"
+    },
+    {
+      "role": "assistant", 
+      "content": "The capital of France is Paris."
+    },
+    {
+      "role": "user",
+      "content": "What about Germany?"
+    }
+  ],
+  "max_tokens": 30,
+  "temperature": 0.5
+}
+
+### 4. Chat Completions - With Stop Sequences
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{model}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Count from 1 to 10:"
+    }
+  ],
+  "max_tokens": 100,
+  "temperature": 0.1,
+  "stop": ["\n", "5"]
+}
+
+### 5. Chat Completions - Streaming (SSE)
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{model}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Tell me a short story about a robot."
+    }
+  ],
+  "max_tokens": 100,
   "temperature": 0.8,
-  "top_p": 0.95,
   "stream": true
 }
 
-### Generate text (dedicated streaming endpoint)
-POST {{v1Base}}/chat/completions/stream
+#### Expected Streaming Response:
+# data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1753061806,"model":"alias13","choices":[{"index":0,"delta":{"content":"Once"},"finish_reason":null}]}
+# data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1753061806,"model":"alias13","choices":[{"index":0,"delta":{"content":" upon"},"finish_reason":null}]}
+# ...
+# data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1753061806,"model":"alias13","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+# data: [DONE]
+
+### 6. Embeddings - Single Text
+POST {{baseUrl}}/v1/embeddings
 Content-Type: application/json
 
 {
   "model": "{{alias}}",
-  "prompt": "Explain quantum computing in simple terms.",
-  "max_tokens": 400,
-  "temperature": 0.7,
-  "top_p": 0.95
+  "input": "Hello, how are you today?"
 }
 
-### Generate embeddings with alias
-POST {{v1Base}}/embeddings
+#### Expected Response Structure:
+# {
+#   "object": "list",
+#   "data": [
+#     {
+#       "object": "embedding",
+#       "index": 0,
+#       "embedding": [0.1, 0.2, 0.3, ...]
+#     }
+#   ],
+#   "model": "alias13",
+#   "usage": {
+#     "prompt_tokens": 6,
+#     "total_tokens": 6
+#   }
+# }
+
+### 7. Embeddings - Multiple Texts
+POST {{baseUrl}}/v1/embeddings
 Content-Type: application/json
 
 {
-  "model": "embedding-model",
-  "texts": [
-    "This is the first sentence to embed.",
-    "This is the second, somewhat longer sentence for embedding.",
-    "A third, completely different sentence about artificial intelligence."
-  ],
-  "normalize": true
+  "model": "{{alias}}",
+  "input": [
+    "Hello world",
+    "Goodbye world",
+    "How are you?"
+  ]
 }
 
-### Generate embeddings with full model ID
-POST {{v1Base}}/embeddings
+# ===========================================
+# Error Handling Tests
+# ===========================================
+
+### 8. Error - Missing Model Parameter
+POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
-  "model": "hf:sentence-transformers/all-MiniLM-L6-v2",
-  "texts": [
-    "Machine learning is a subset of artificial intelligence.",
-    "Deep learning uses neural networks with multiple layers.",
-    "Natural language processing helps computers understand human language."
-  ],
-  "normalize": true
+  "messages": [
+    {
+      "role": "user",
+      "content": "Test"
+    }
+  ]
 }
 
-### Test error handling - non-existent model
-POST {{v1Base}}/chat/completions
+#### Expected Error Response:
+# {
+#   "error": {
+#     "message": "Model is required",
+#     "type": "invalid_request_error",
+#     "param": "model"
+#   }
+# }
+
+### 9. Error - Empty Messages Array
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "messages": []
+}
+
+### 10. Error - Non-existent Model
+POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
   "model": "non-existent-model",
-  "prompt": "This should fail.",
-  "max_tokens": 10
+  "messages": [
+    {
+      "role": "user", 
+      "content": "Test"
+    }
+  ]
 }
 
-### Test error handling - embedding model for text generation
-POST {{v1Base}}/chat/completions
+### 11. Error - Model Not Loaded
+POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
-  "model": "embedding-model",
-  "prompt": "This should fail because it's an embedding model.",
-  "max_tokens": 10
+  "model": "{{model}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Test"
+    }
+  ]
 }
 
-### Test error handling - text model for embeddings
-POST {{v1Base}}/embeddings
+### 12. Error - Missing Input for Embeddings
+POST {{baseUrl}}/v1/embeddings
+Content-Type: application/json
+
+{
+  "model": "{{alias}}"
+}
+
+# ===========================================
+# Performance and Edge Case Tests  
+# ===========================================
+
+### 13. Chat Completions - Maximum Tokens
+POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
   "model": "{{alias}}",
-  "texts": ["This should fail because it's a text generation model."]
+  "messages": [
+    {
+      "role": "user",
+      "content": "Write a detailed explanation of quantum computing."
+    }
+  ],
+  "max_tokens": 1000,
+  "temperature": 0.3
+}
+
+### 14. Chat Completions - High Temperature (Creative)
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Create a creative poem about AI."
+    }
+  ],
+  "max_tokens": 200,
+  "temperature": 1.5,
+  "top_p": 0.9
+}
+
+### 15. Chat Completions - Low Temperature (Deterministic)
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is 2 + 2?"
+    }
+  ],
+  "max_tokens": 10,
+  "temperature": 0.0,
+  "top_p": 1.0
+}
+
+### 16. Embeddings - Long Text
+POST {{baseUrl}}/v1/embeddings
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "input": "This is a very long text that should test the embedding capabilities of the model. It contains multiple sentences and should provide a good test case for embedding generation. The text covers various topics and should result in a meaningful vector representation that captures the semantic content of the entire passage."
+}
+
+# ===========================================
+# CLEANUP: Unload Model After Testing
+# ===========================================
+
+### Unload model after testing
+POST {{baseUrl}}/api/models/unload
+Content-Type: application/json
+
+{
+  "model": "{{alias}}"
 }

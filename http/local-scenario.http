@@ -1,0 +1,78 @@
+# LM SupplyDepot
+@baseUrl = http://localhost:5181
+
+# Filer Proxy (append url ending /lm)
+# @baseUrl = http://localhost:27010/lm
+
+@model = hf:DevQuasar/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B.f16
+@alias = alias13
+@model = hf:unsloth/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-UD-IQ1_S
+
+###
+GET http://localhost:5181/api/debug/services
+
+#### 200 OK
+{"modelLoader":{"type":"LMSupplyDepots.Inference.Services.RepositoryModelLoaderService","assembly":"LMSupplyDepots.Inference","isNull":false},"adapters":[{"type":"LMSupplyDepots.Inference.Adapters.LLamaAdapter","adapterName":"LLama","supportedFormats":["GGUF","GGML"],"supportedModelTypes":["TextGeneration","Embedding"]}],"adapterCount":1,"lLamaServices":{"modelManager":{"type":"LMSupplyDepots.External.LLamaEngine.Services.LLamaModelManager","isRegistered":true},"backendService":{"type":"LMSupplyDepots.External.LLamaEngine.Services.LLamaBackendService","isRegistered":true},"llmService":{"type":"LMSupplyDepots.External.LLamaEngine.Services.LLMService","isRegistered":true}}}
+
+### List available models
+GET {{baseUrl}}/api/models
+
+#### 200 OK
+[{"alias":"hyperclovax","id":"hf:DevQuasar/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B.f16","name":"naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF","description":"DevQuasar/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF - Tags: gguf, text-generation, base_model:naver-hyperclovax/HyperCLOVAX-SEED-Text-Instruct-0.5B, base_model:quantized:naver-hyperclovax/HyperCLOVAX-SEED-Text-Instruct-0.5B, endpoints_compatible - Created by DevQuasar","version":"20250526","localPath":"D:\\filer-data\\models\\DevQuasar_naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF","capabilities":{"supportsTextGeneration":true,"supportsEmbeddings":false,"supportsImageUnderstanding":false,"maxContextLength":4096},"registry":"hf","repoId":"DevQuasar/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF","type":"TextGeneration","format":"gguf","artifactName":"naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B.f16","sizeInBytes":1136722816,"filePaths":["naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B.f16.gguf"],"isLocal":true,"isLoaded":true}]
+
+
+### Load Model (using correct alias)
+POST {{baseUrl}}/api/models/load
+Content-Type: application/json
+
+{
+    "model": "{{alias}}"
+}
+
+### Load Model (using full model ID)
+POST {{baseUrl}}/api/models/load
+Content-Type: application/json
+
+{
+    "model": "{{model}}"
+}
+
+### Load Model (test with wrong alias)
+POST {{baseUrl}}/api/models/load
+Content-Type: application/json
+
+{
+    "model": "alias13"
+}
+
+#### 200 OK
+{"message":"Model 'hyperclovax' loaded successfully","model":{"alias":"hyperclovax","id":"hf:DevQuasar/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B.f16","name":"naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF","description":"DevQuasar/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF - Tags: gguf, text-generation, base_model:naver-hyperclovax/HyperCLOVAX-SEED-Text-Instruct-0.5B, base_model:quantized:naver-hyperclovax/HyperCLOVAX-SEED-Text-Instruct-0.5B, endpoints_compatible - Created by DevQuasar","version":"20250526","localPath":"D:\\filer-data\\models\\DevQuasar_naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF","capabilities":{"supportsTextGeneration":true,"supportsEmbeddings":false,"supportsImageUnderstanding":false,"maxContextLength":4096},"registry":"hf","repoId":"DevQuasar/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF","type":"TextGeneration","format":"gguf","artifactName":"naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B.f16","sizeInBytes":1136722816,"filePaths":["naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B.f16.gguf"],"isLocal":true,"isLoaded":true}}
+
+### Set model alias
+PUT {{baseUrl}}/api/alias
+Content-Type: application/json
+
+{
+  "name": "hf:DevQuasar/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B.f16",
+  "alias": "alias13"
+}
+
+### Get Loaded Models
+GET {{baseUrl}}/v1/models
+
+### Check specific model status
+GET {{baseUrl}}/api/models/{{alias}}
+
+### Check model loading status
+GET {{baseUrl}}/api/models/status
+
+### Unload model (for testing)
+POST {{baseUrl}}/api/models/unload
+Content-Type: application/json
+
+{
+    "model": "{{alias}}"
+}
+
+#### 200 OK
+{"object":"list","data":[{"id":"hf:DevQuasar/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B.f16","object":"model","created":1753006621,"owned_by":"local","type":"text-generation"}]}

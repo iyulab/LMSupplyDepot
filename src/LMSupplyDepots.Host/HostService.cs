@@ -1,9 +1,13 @@
 using LMSupplyDepots.External.HuggingFace.Models;
+using LMSupplyDepots.ModelHub;
+using LMSupplyDepots.Inference;
+using LMSupplyDepots.Interfaces;
+using LMSupplyDepots.SDK;
 
 namespace LMSupplyDepots.Host;
 
 /// <summary>
-/// Hosting service that delegates functionality to LMSupplyDepot SDK
+/// Hosting service that is a thin wrapper around LMSupplyDepot SDK
 /// </summary>
 internal class HostService : IHostService, IAsyncDisposable
 {
@@ -11,12 +15,13 @@ internal class HostService : IHostService, IAsyncDisposable
     private readonly LMSupplyDepot _depot;
     private bool _disposed;
 
-    public HostService(ILogger<HostService> logger, IOptions<LMSupplyDepotOptions> options)
+    public HostService(
+        ILogger<HostService> logger,
+        LMSupplyDepot depot)
     {
         _logger = logger;
-        var depotOptions = options.Value;
-        _depot = new LMSupplyDepot(depotOptions, CreateLoggerFactory(logger));
-        _logger.LogInformation("LMSupplyDepots Host Service initialized with models directory: {ModelsDirectory}", depotOptions.DataPath);
+        _depot = depot;
+        _logger.LogInformation("LMSupplyDepots Host Service initialized as thin wrapper around LMSupplyDepot SDK");
     }
 
     #region Local Model Management
@@ -28,7 +33,7 @@ internal class HostService : IHostService, IAsyncDisposable
         => _depot.GetModelAsync(modelId, cancellationToken);
 
     public Task<LMModel?> GetModelByAliasAsync(string alias, CancellationToken cancellationToken = default)
-        => _depot.GetModelByAliasAsync(alias, cancellationToken);
+        => _depot.GetModelAsync(alias, cancellationToken);
 
     public Task<bool> IsModelDownloadedAsync(string modelId, CancellationToken cancellationToken = default)
         => _depot.IsModelDownloadedAsync(modelId, cancellationToken);
@@ -59,229 +64,70 @@ internal class HostService : IHostService, IAsyncDisposable
     public Task<IEnumerable<DownloadInfo>> GetAllDownloadsAsync(CancellationToken cancellationToken = default)
         => _depot.GetAllDownloadsAsync(cancellationToken);
 
-    /// <summary>
-    /// Starts a download with proper validation and returns operation result
-    /// </summary>
     public async Task<DownloadOperationResult> StartDownloadAsync(string modelKey, CancellationToken cancellationToken = default)
     {
         try
         {
-            // Check current status
-            var currentProgress = await _depot.GetDownloadProgressAsync(modelKey, cancellationToken);
-
-            if (currentProgress?.Status == ModelDownloadStatus.Downloading)
-            {
-                return DownloadOperationResult.CreateFailure(
-                    $"Model {modelKey} is already being downloaded",
-                    "AlreadyDownloading");
-            }
-
-            if (currentProgress?.Status == ModelDownloadStatus.Completed)
-            {
-                return DownloadOperationResult.CreateSuccess(
-                    $"Model {modelKey} is already downloaded",
-                    "AlreadyCompleted",
-                    currentProgress);
-            }
-
-            // Start download in background
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await _depot.DownloadModelAsync(modelKey, null, CancellationToken.None);
-                    _logger.LogInformation("Background download completed for model {Model}", modelKey);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Background download failed for model {Model}", modelKey);
-                }
-            });
-
-            return DownloadOperationResult.CreateSuccess(
-                $"Download started for model {modelKey}",
-                "Started");
+            var result = await _depot.DownloadModelAsync(modelKey, null, cancellationToken);
+            var progress = await _depot.GetDownloadProgressAsync(modelKey, cancellationToken);
+            return DownloadOperationResult.CreateSuccess($"Download started for {modelKey}", "Started", progress);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error starting download for model {Model}", modelKey);
-            return DownloadOperationResult.CreateFailure(ex.Message);
+            _logger.LogError(ex, "Failed to start download for {ModelKey}", modelKey);
+            return DownloadOperationResult.CreateFailure($"Failed to start download: {ex.Message}", "Failed");
         }
     }
 
-    /// <summary>
-    /// Pauses a download with proper validation and returns operation result
-    /// </summary>
     public async Task<DownloadOperationResult> PauseDownloadAsync(string modelKey, CancellationToken cancellationToken = default)
     {
         try
         {
-            var currentProgress = await _depot.GetDownloadProgressAsync(modelKey, cancellationToken);
-
-            if (currentProgress == null)
-            {
-                return DownloadOperationResult.CreateFailure(
-                    $"No download found for model {modelKey}",
-                    "NotFound");
-            }
-
-            if (currentProgress.Status == ModelDownloadStatus.Completed)
-            {
-                return DownloadOperationResult.CreateSuccess(
-                    $"Model {modelKey} is already completed",
-                    "AlreadyCompleted",
-                    currentProgress);
-            }
-
-            if (currentProgress.Status == ModelDownloadStatus.Paused)
-            {
-                return DownloadOperationResult.CreateSuccess(
-                    $"Model {modelKey} is already paused",
-                    "AlreadyPaused",
-                    currentProgress);
-            }
-
-            if (currentProgress.Status != ModelDownloadStatus.Downloading)
-            {
-                return DownloadOperationResult.CreateFailure(
-                    $"Cannot pause model {modelKey} - current status: {currentProgress.Status}",
-                    "InvalidState");
-            }
-
-            // Actually pause the download
-            bool result = await _depot.PauseDownloadAsync(modelKey, cancellationToken);
-
-            if (result)
-            {
-                // Get updated progress
-                var updatedProgress = await _depot.GetDownloadProgressAsync(modelKey, cancellationToken);
-                return DownloadOperationResult.CreateSuccess(
-                    $"Download paused for model {modelKey}",
-                    "Paused",
-                    updatedProgress);
-            }
-            else
-            {
-                return DownloadOperationResult.CreateFailure(
-                    $"Failed to pause download for model {modelKey}",
-                    "PauseFailed");
-            }
+            var result = await _depot.PauseDownloadAsync(modelKey, cancellationToken);
+            var progress = await _depot.GetDownloadProgressAsync(modelKey, cancellationToken);
+            var status = result ? "Paused" : "Failed to pause";
+            var message = result ? $"Download paused for {modelKey}" : $"Failed to pause download for {modelKey}";
+            return result
+                ? DownloadOperationResult.CreateSuccess(message, status, progress)
+                : DownloadOperationResult.CreateFailure(message, status);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error pausing download for model {Model}", modelKey);
-            return DownloadOperationResult.CreateFailure(ex.Message);
+            _logger.LogError(ex, "Failed to pause download for {ModelKey}", modelKey);
+            return DownloadOperationResult.CreateFailure($"Failed to pause download: {ex.Message}", "Failed");
         }
     }
 
-    /// <summary>
-    /// Resumes a download with proper validation and returns operation result
-    /// </summary>
     public async Task<DownloadOperationResult> ResumeDownloadAsync(string modelKey, CancellationToken cancellationToken = default)
     {
         try
         {
-            var currentProgress = await _depot.GetDownloadProgressAsync(modelKey, cancellationToken);
-
-            if (currentProgress == null)
-            {
-                return DownloadOperationResult.CreateFailure(
-                    $"No download found for model {modelKey}",
-                    "NotFound");
-            }
-
-            if (currentProgress.Status == ModelDownloadStatus.Completed)
-            {
-                return DownloadOperationResult.CreateSuccess(
-                    $"Model {modelKey} is already completed",
-                    "AlreadyCompleted",
-                    currentProgress);
-            }
-
-            if (currentProgress.Status == ModelDownloadStatus.Downloading)
-            {
-                return DownloadOperationResult.CreateSuccess(
-                    $"Model {modelKey} is already downloading",
-                    "AlreadyDownloading",
-                    currentProgress);
-            }
-
-            if (currentProgress.Status != ModelDownloadStatus.Paused)
-            {
-                return DownloadOperationResult.CreateFailure(
-                    $"Cannot resume model {modelKey} - current status: {currentProgress.Status}",
-                    "InvalidState");
-            }
-
-            // Resume download in background
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await _depot.ResumeDownloadAsync(modelKey, null, CancellationToken.None);
-                    _logger.LogInformation("Background resume completed for model {Model}", modelKey);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Background resume failed for model {Model}", modelKey);
-                }
-            });
-
-            return DownloadOperationResult.CreateSuccess(
-                $"Download resumed for model {modelKey}",
-                "Resumed");
+            var result = await _depot.ResumeDownloadAsync(modelKey, null, cancellationToken);
+            var progress = await _depot.GetDownloadProgressAsync(modelKey, cancellationToken);
+            return DownloadOperationResult.CreateSuccess($"Download resumed for {modelKey}", "Resumed", progress);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error resuming download for model {Model}", modelKey);
-            return DownloadOperationResult.CreateFailure(ex.Message);
+            _logger.LogError(ex, "Failed to resume download for {ModelKey}", modelKey);
+            return DownloadOperationResult.CreateFailure($"Failed to resume download: {ex.Message}", "Failed");
         }
     }
 
-    /// <summary>
-    /// Cancels a download with proper validation and returns operation result
-    /// </summary>
     public async Task<DownloadOperationResult> CancelDownloadAsync(string modelKey, CancellationToken cancellationToken = default)
     {
         try
         {
-            var currentProgress = await _depot.GetDownloadProgressAsync(modelKey, cancellationToken);
-
-            if (currentProgress == null)
-            {
-                return DownloadOperationResult.CreateFailure(
-                    $"No download found for model {modelKey}",
-                    "NotFound");
-            }
-
-            if (currentProgress.Status == ModelDownloadStatus.Completed)
-            {
-                return DownloadOperationResult.CreateSuccess(
-                    $"Model {modelKey} is already completed",
-                    "AlreadyCompleted",
-                    currentProgress);
-            }
-
-            // Actually cancel the download
-            bool result = await _depot.CancelDownloadAsync(modelKey, cancellationToken);
-
-            if (result)
-            {
-                return DownloadOperationResult.CreateSuccess(
-                    $"Download cancelled for model {modelKey}",
-                    "Cancelled");
-            }
-            else
-            {
-                return DownloadOperationResult.CreateFailure(
-                    $"Failed to cancel download for model {modelKey}",
-                    "CancelFailed");
-            }
+            var result = await _depot.CancelDownloadAsync(modelKey, cancellationToken);
+            var status = result ? "Cancelled" : "Failed to cancel";
+            var message = result ? $"Download cancelled for {modelKey}" : $"Failed to cancel download for {modelKey}";
+            return result
+                ? DownloadOperationResult.CreateSuccess(message, status)
+                : DownloadOperationResult.CreateFailure(message, status);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error cancelling download for model {Model}", modelKey);
-            return DownloadOperationResult.CreateFailure(ex.Message);
+            _logger.LogError(ex, "Failed to cancel download for {ModelKey}", modelKey);
+            return DownloadOperationResult.CreateFailure($"Failed to cancel download: {ex.Message}", "Failed");
         }
     }
 
@@ -296,29 +142,55 @@ internal class HostService : IHostService, IAsyncDisposable
         => _depot.GetLoadedModelsAsync(cancellationToken);
 
     public Task<LMModel> LoadModelAsync(string modelId, Dictionary<string, object?>? parameters = null, CancellationToken cancellationToken = default)
-        => _depot.LoadModelAsync(modelId, parameters, cancellationToken);
+    {
+        _logger.LogInformation("HostService.LoadModelAsync called for model: {ModelId}", modelId);
+        return _depot.LoadModelAsync(modelId, parameters, cancellationToken);
+    }
 
     public Task UnloadModelAsync(string modelId, CancellationToken cancellationToken = default)
-        => _depot.UnloadModelAsync(modelId, cancellationToken);
+    {
+        _logger.LogInformation("HostService.UnloadModelAsync called for model: {ModelId}", modelId);
+        return _depot.UnloadModelAsync(modelId, cancellationToken);
+    }
 
     #endregion
 
     #region Text Generation
 
-    public Task<GenerationResponse> GenerateTextAsync(string modelId, GenerationRequest request, CancellationToken cancellationToken = default)
-        => _depot.GenerateTextAsync(modelId, request, cancellationToken);
+    public async Task<GenerationResponse> GenerateTextAsync(string modelId, GenerationRequest request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogDebug("Generating text for model {ModelId}", modelId);
+            _logger.LogDebug("Generation request: Prompt={Prompt}, MaxTokens={MaxTokens}, Temperature={Temperature}",
+                request.Prompt, request.MaxTokens, request.Temperature);
 
+            // Use the LMSupplyDepot to generate text
+            var response = await _depot.GenerateTextAsync(modelId, request, cancellationToken);
+
+            _logger.LogDebug("Text generation completed for model {ModelId}", modelId);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate text for model {ModelId}. Request: {Request}", modelId,
+                System.Text.Json.JsonSerializer.Serialize(request));
+            throw;
+        }
+    }
     public async IAsyncEnumerable<string> GenerateTextStreamAsync(
         string modelId,
         GenerationRequest request,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        request.Stream = true;
-        await foreach (var token in _depot.GenerateTextStreamAsync(
-            modelId, request.Prompt, request.MaxTokens, request.Temperature, request.TopP, request.Parameters, cancellationToken))
+        _logger.LogDebug("Starting text generation stream for model {ModelId}", modelId);
+
+        await foreach (var token in _depot.GenerateTextStreamAsync(modelId, request.Prompt ?? "", request.MaxTokens, request.Temperature, request.TopP, request.Parameters, cancellationToken))
         {
             yield return token;
         }
+
+        _logger.LogDebug("Text generation stream completed for model {ModelId}", modelId);
     }
 
     public Task<GenerationResponse> GenerateTextAsync(
@@ -340,15 +212,17 @@ internal class HostService : IHostService, IAsyncDisposable
 
     #endregion
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (_disposed) return;
+        if (_disposed) return ValueTask.CompletedTask;
 
+        // Dispose the depot if it implements IDisposable
         if (_depot is IDisposable disposableDepot)
             disposableDepot.Dispose();
 
         _disposed = true;
         GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
     }
 
     private static ILoggerFactory CreateLoggerFactory(ILogger logger)

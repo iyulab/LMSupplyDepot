@@ -384,6 +384,8 @@ public partial class LMSupplyDepot
     /// </summary>
     private void ConfigureInferenceServices(IServiceCollection services)
     {
+        _logger.LogInformation("Configuring Inference services...");
+
         // Add core inference services
         services.AddInferenceServices(options =>
         {
@@ -406,7 +408,11 @@ public partial class LMSupplyDepot
             }
         });
 
+        _logger.LogInformation("Adding LLama backend...");
         // Add LLama backend
         services.AddLLamaBackend();
+        _logger.LogInformation("LLama backend added");
+
+        _logger.LogInformation("Inference services configured");
     }
 }

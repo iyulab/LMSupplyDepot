@@ -1,4 +1,5 @@
 using LMSupplyDepots.Host;
+using LMSupplyDepots.SDK;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -14,19 +15,29 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddLMSupplyDepots(this IServiceCollection services, Action<LMSupplyDepotOptions>? configureOptions = null)
     {
-        // Register options
+        Console.WriteLine("[Host ServiceCollectionExtensions] AddLMSupplyDepots called");
+
+        // Configure options
+        var options = new LMSupplyDepotOptions();
         if (configureOptions != null)
         {
+            configureOptions(options);
             services.Configure(configureOptions);
         }
         else
         {
-            services.TryAddSingleton(Microsoft.Extensions.Options.Options.Create(new LMSupplyDepotOptions()));
+            services.TryAddSingleton(Microsoft.Extensions.Options.Options.Create(options));
         }
 
-        // Register host service
+        Console.WriteLine($"[Host ServiceCollectionExtensions] Options configured with DataPath: {options.DataPath}");
+
+        // Register SDK services using the SDK extension method
+        services.AddLMSupplyDepotSDK(options);
+
+        // Register host service (no longer using LMSupplyDepot wrapper)
         services.TryAddSingleton<IHostService, HostService>();
 
+        Console.WriteLine("[Host ServiceCollectionExtensions] All services registered");
         return services;
     }
 }

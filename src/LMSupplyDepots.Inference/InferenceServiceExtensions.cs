@@ -3,6 +3,7 @@ using LMSupplyDepots.Inference.Configuration;
 using LMSupplyDepots.Inference.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace LMSupplyDepots.Inference;
 
@@ -32,9 +33,8 @@ public static class ServiceExtensions
         services.TryAddSingleton<TokenizerService>();
         services.TryAddSingleton<ModelStateService>();
 
-        // Register ModelLoaderService as an abstract interface
-        // (concrete implementation should be provided by hosting application)
-        services.TryAddSingleton<IModelLoader, ModelLoaderService>();
+        // Note: IModelLoader registration is handled by the hosting application
+        // to allow for different implementations (ModelLoaderService vs RepositoryModelLoaderService)
 
         return services;
     }
@@ -47,8 +47,11 @@ public static class ServiceExtensions
         // Add LLama engine services
         services.AddLLamaEngine();
 
-        // Register the LLama adapter
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<BaseModelAdapter, LLamaAdapter>());
+        // Register the LLama adapter directly without TryAdd
+        services.AddSingleton<BaseModelAdapter, LLamaAdapter>();
+
+        // Add debug logging - will be available when logger is resolved
+        Console.WriteLine("[DEBUG] LLamaAdapter registered as BaseModelAdapter");
 
         return services;
     }

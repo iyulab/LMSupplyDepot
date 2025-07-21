@@ -20,6 +20,9 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
         _baseDirectory = options.Value.DataPath;
         _logger = logger;
 
+        Console.WriteLine($"[FileSystemModelRepository] Initialized with DataPath: {_baseDirectory}");
+        _logger.LogInformation("FileSystemModelRepository initialized with DataPath: {DataPath}", _baseDirectory);
+
         // Ensure base directories exist
         FileSystemHelper.EnsureBaseDirectoriesExists(_baseDirectory);
     }

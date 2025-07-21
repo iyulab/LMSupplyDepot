@@ -77,6 +77,45 @@ public class V1Controller : ControllerBase
             return BadRequest(CreateErrorResponse("invalid_request_error", "Messages are required", "messages"));
         }
 
+        // Validate messages content
+        foreach (var message in request.Messages)
+        {
+            if (string.IsNullOrEmpty(message.Role))
+            {
+                return BadRequest(CreateErrorResponse("invalid_request_error", "Message role is required", "messages"));
+            }
+
+            if (string.IsNullOrEmpty(message.Content))
+            {
+                return BadRequest(CreateErrorResponse("invalid_request_error", "Message content is required", "messages"));
+            }
+
+            // Validate role values
+            var validRoles = new[] { "system", "user", "assistant" };
+            if (!validRoles.Contains(message.Role.ToLowerInvariant()))
+            {
+                return BadRequest(CreateErrorResponse("invalid_request_error",
+                    $"Invalid message role '{message.Role}'. Must be one of: {string.Join(", ", validRoles)}",
+                    "messages"));
+            }
+        }
+
+        // Validate parameter ranges
+        if (request.Temperature.HasValue && (request.Temperature < 0 || request.Temperature > 2))
+        {
+            return BadRequest(CreateErrorResponse("invalid_request_error", "Temperature must be between 0 and 2", "temperature"));
+        }
+
+        if (request.TopP.HasValue && (request.TopP <= 0 || request.TopP > 1))
+        {
+            return BadRequest(CreateErrorResponse("invalid_request_error", "Top-p must be between 0 and 1", "top_p"));
+        }
+
+        if (request.MaxTokens.HasValue && request.MaxTokens <= 0)
+        {
+            return BadRequest(CreateErrorResponse("invalid_request_error", "Max tokens must be greater than 0", "max_tokens"));
+        }
+
         try
         {
             // Check if the model exists
@@ -84,6 +123,11 @@ public class V1Controller : ControllerBase
             if (model == null)
             {
                 return NotFound(CreateErrorResponse("model_not_found", $"Model '{request.Model}' not found", "model"));
+            }
+
+            if (model.IsLoaded == false)
+            {
+                return NotFound(CreateErrorResponse("model_not_found", $"Model '{request.Model}' is not loaded", "model"));
             }
 
             // Check if the model supports text generation
@@ -103,8 +147,27 @@ public class V1Controller : ControllerBase
                 MaxTokens = request.MaxTokens ?? 256,
                 Temperature = request.Temperature ?? 0.7f,
                 TopP = request.TopP ?? 0.95f,
-                Stream = request.Stream
+                Stream = request.Stream,
+                Parameters = new Dictionary<string, object?>()
             };
+
+            // Add stop sequences if provided
+            if (request.Stop != null && request.Stop.Count > 0)
+            {
+                generationRequest.Parameters["stop"] = request.Stop;
+            }
+
+            // Add presence_penalty if provided
+            if (request.PresencePenalty.HasValue)
+            {
+                generationRequest.Parameters["presence_penalty"] = request.PresencePenalty.Value;
+            }
+
+            // Add frequency_penalty if provided
+            if (request.FrequencyPenalty.HasValue)
+            {
+                generationRequest.Parameters["frequency_penalty"] = request.FrequencyPenalty.Value;
+            }
 
             // Handle streaming requests
             if (request.Stream)
@@ -179,10 +242,19 @@ public class V1Controller : ControllerBase
                 return NotFound(CreateErrorResponse("model_not_found", $"Model '{request.Model}' not found", "model"));
             }
 
+            if (model.IsLoaded == false)
+            {
+                return NotFound(CreateErrorResponse("model_not_found", $"Model '{request.Model}' is not loaded", "model"));
+            }
+
             // Check if the model supports embeddings
             if (!model.Capabilities.SupportsEmbeddings)
             {
-                return BadRequest(CreateErrorResponse("invalid_request_error", $"Model '{request.Model}' does not support embeddings", "model"));
+                // Some text generation models can be used for embeddings via hidden states
+                // For now, return a more informative error
+                return BadRequest(CreateErrorResponse("model_not_supported",
+                    $"Model '{request.Model}' does not support embeddings. Only embedding-specific models are currently supported.",
+                    "model"));
             }
 
             // Convert input to string array

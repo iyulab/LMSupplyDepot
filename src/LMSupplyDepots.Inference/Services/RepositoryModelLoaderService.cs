@@ -1,3 +1,5 @@
+using LMSupplyDepots.Inference.Adapters;
+
 namespace LMSupplyDepots.Inference.Services;
 
 /// <summary>
@@ -7,15 +9,24 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
 {
     private readonly IModelRepository _repository;
     private readonly ILogger<RepositoryModelLoaderService> _logger;
+    private readonly IEnumerable<BaseModelAdapter> _adapters;
     private readonly ConcurrentDictionary<string, LMModel> _loadedModels = new();
     private bool _disposed;
 
     public RepositoryModelLoaderService(
         IModelRepository repository,
-        ILogger<RepositoryModelLoaderService> logger)
+        ILogger<RepositoryModelLoaderService> logger,
+        IEnumerable<BaseModelAdapter> adapters)
     {
         _repository = repository;
         _logger = logger;
+        _adapters = adapters;
+
+        // Log available adapters for debugging
+        var adapterList = adapters.ToList();
+        _logger.LogInformation("RepositoryModelLoaderService initialized with {AdapterCount} adapters: {AdapterNames}",
+            adapterList.Count,
+            string.Join(", ", adapterList.Select(a => a.AdapterName)));
     }
 
     /// <summary>
@@ -44,6 +55,35 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
 
             // Validate model can be loaded
             ValidateModelForLoading(model);
+
+            // Find a suitable adapter for the model
+            _logger.LogInformation("Finding adapter for model {ModelId} with format '{Format}' and type '{Type}'",
+                modelId, model.Format, model.Type);
+
+            var adapter = FindAdapter(model);
+            if (adapter == null)
+            {
+                _logger.LogError("No adapter found for model {ModelId} with format '{Format}' and type '{Type}'. Available adapters: {AdapterNames}",
+                    modelId, model.Format, model.Type,
+                    string.Join(", ", _adapters.Select(a => $"{a.AdapterName}({string.Join(",", a.SupportedFormats)})")));
+
+                throw new ModelLoadException(modelId,
+                    $"No adapter found for model with format '{model.Format}' and type '{model.Type}'");
+            }
+
+            // Load the model using the adapter
+            _logger.LogInformation("Loading model {ModelId} using adapter {AdapterName}",
+                modelId, adapter.AdapterName);
+
+            var success = await adapter.LoadModelAsync(model, parameters, cancellationToken);
+
+            _logger.LogInformation("Adapter {AdapterName} returned {Success} for model {ModelId}",
+                adapter.AdapterName, success, modelId);
+
+            if (!success)
+            {
+                throw new ModelLoadException(modelId, "Failed to load model using adapter");
+            }
 
             // Mark as loaded and update timestamps
             model.SetLoaded();
@@ -78,6 +118,21 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
             // Remove from loaded models cache
             if (_loadedModels.TryRemove(modelId, out var model))
             {
+                // Find the adapter for this model
+                var adapter = FindAdapter(model);
+                if (adapter != null)
+                {
+                    // Unload from the adapter first
+                    _logger.LogInformation("Unloading model {ModelId} using adapter {AdapterName}",
+                        modelId, adapter.AdapterName);
+
+                    var success = await adapter.UnloadModelAsync(modelId, cancellationToken);
+                    if (!success)
+                    {
+                        _logger.LogWarning("Adapter failed to unload model {ModelId}", modelId);
+                    }
+                }
+
                 // Mark as unloaded
                 model.SetUnloaded();
 
@@ -92,6 +147,16 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
                 var repoModel = await _repository.GetModelAsync(modelId, cancellationToken);
                 if (repoModel != null && repoModel.IsLoaded)
                 {
+                    // Try to unload using adapter even if not in cache
+                    var adapter = FindAdapter(repoModel);
+                    if (adapter != null)
+                    {
+                        _logger.LogInformation("Unloading model {ModelId} using adapter {AdapterName} (not in cache)",
+                            modelId, adapter.AdapterName);
+
+                        await adapter.UnloadModelAsync(modelId, cancellationToken);
+                    }
+
                     repoModel.SetUnloaded();
                     await _repository.SaveModelAsync(repoModel, cancellationToken);
                     _logger.LogInformation("Model {ModelId} load state updated to unloaded", modelId);
@@ -131,8 +196,22 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
     {
         var loadedModels = new List<LMModel>();
 
-        // Add models from our cache
-        loadedModels.AddRange(_loadedModels.Values);
+        // Get fresh data from repository for all cached models to ensure alias information is up-to-date
+        foreach (var cachedModel in _loadedModels.Values)
+        {
+            var freshModel = await _repository.GetModelAsync(cachedModel.Id, cancellationToken);
+            if (freshModel != null && freshModel.IsLoaded)
+            {
+                // Update cache with fresh model data (including updated alias)
+                _loadedModels[cachedModel.Id] = freshModel;
+                loadedModels.Add(freshModel);
+            }
+            else if (freshModel != null)
+            {
+                // Model exists but is marked as unloaded, remove from cache
+                _loadedModels.TryRemove(cachedModel.Id, out _);
+            }
+        }
 
         // Also check repository for any models marked as loaded that might not be in our cache
         // This can happen if the service was restarted
@@ -155,6 +234,22 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
         }
 
         return loadedModels.AsReadOnly();
+    }
+
+    /// <summary>
+    /// Finds a suitable adapter for the given model
+    /// </summary>
+    private BaseModelAdapter? FindAdapter(LMModel model)
+    {
+        foreach (var adapter in _adapters)
+        {
+            if (adapter.CanHandle(model))
+            {
+                return adapter;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

@@ -1,0 +1,150 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Moq;
+using LMSupplyDepots.Host.Controllers;
+using LMSupplyDepots.Host;
+using LMSupplyDepots.Models;
+using LMSupplyDepots.Host.Models.OpenAI;
+using Xunit;
+
+namespace LMSupplyDepots.Host.Tests.Controllers;
+
+/// <summary>
+/// Unit tests for V1Controller
+/// </summary>
+public class V1ControllerTests
+{
+    private readonly Mock<IHostService> _mockHostService;
+    private readonly Mock<ILogger<V1Controller>> _mockLogger;
+    private readonly V1Controller _controller;
+
+    public V1ControllerTests()
+    {
+        _mockHostService = new Mock<IHostService>();
+        _mockLogger = new Mock<ILogger<V1Controller>>();
+        _controller = new V1Controller(_mockHostService.Object, _mockLogger.Object);
+    }
+
+    [Fact]
+    public async Task ListModels_ReturnsModelsWithAliasAsId_WhenAliasIsSet()
+    {
+        // Arrange
+        var modelWithAlias = new LMModel
+        {
+            Id = "hf:DevQuasar/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B.f16",
+            Alias = "hyperclovax",
+            Name = "HyperCLOVA X",
+            Type = ModelType.TextGeneration
+        };
+
+        var modelWithoutAlias = new LMModel
+        {
+            Id = "hf:microsoft/DialoGPT-medium",
+            Alias = null,
+            Name = "DialoGPT Medium",
+            Type = ModelType.TextGeneration
+        };
+
+        var loadedModels = new List<LMModel> { modelWithAlias, modelWithoutAlias };
+
+        _mockHostService
+            .Setup(x => x.GetLoadedModelsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(loadedModels);
+
+        // Act
+        var result = await _controller.ListModels(CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<OpenAIModelsResponse>(okResult.Value);
+
+        Assert.Equal(2, response.Data.Count);
+
+        // Model with alias should use alias as ID
+        var aliasedModel = response.Data.First(m => m.Id == "hyperclovax");
+        Assert.NotNull(aliasedModel);
+        Assert.Equal("hyperclovax", aliasedModel.Id);
+
+        // Model without alias should use full ID
+        var normalModel = response.Data.First(m => m.Id == "hf:microsoft/DialoGPT-medium");
+        Assert.NotNull(normalModel);
+        Assert.Equal("hf:microsoft/DialoGPT-medium", normalModel.Id);
+    }
+
+    [Fact]
+    public async Task ListModels_ReturnsEmptyList_WhenNoModelsLoaded()
+    {
+        // Arrange
+        _mockHostService
+            .Setup(x => x.GetLoadedModelsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<LMModel>());
+
+        // Act
+        var result = await _controller.ListModels(CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<OpenAIModelsResponse>(okResult.Value);
+
+        Assert.Empty(response.Data);
+        Assert.Equal("list", response.Object);
+    }
+
+    [Fact]
+    public async Task ListModels_ReturnsServerError_WhenServiceThrows()
+    {
+        // Arrange
+        _mockHostService
+            .Setup(x => x.GetLoadedModelsAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Service error"));
+
+        // Act
+        var result = await _controller.ListModels(CancellationToken.None);
+
+        // Assert
+        var statusResult = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(500, statusResult.StatusCode);
+    }
+
+    [Fact]
+    public void ModelKey_ReturnsAlias_WhenAliasIsSet()
+    {
+        // Arrange
+        var model = new LMModel
+        {
+            Id = "hf:DevQuasar/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B-GGUF/naver-hyperclovax.HyperCLOVAX-SEED-Text-Instruct-0.5B.f16",
+            Alias = "hyperclovax"
+        };
+
+        // Act & Assert
+        Assert.Equal("hyperclovax", model.Key);
+    }
+
+    [Fact]
+    public void ModelKey_ReturnsId_WhenAliasIsNull()
+    {
+        // Arrange
+        var model = new LMModel
+        {
+            Id = "hf:microsoft/DialoGPT-medium",
+            Alias = null
+        };
+
+        // Act & Assert
+        Assert.Equal("hf:microsoft/DialoGPT-medium", model.Key);
+    }
+
+    [Fact]
+    public void ModelKey_ReturnsId_WhenAliasIsEmpty()
+    {
+        // Arrange
+        var model = new LMModel
+        {
+            Id = "hf:microsoft/DialoGPT-medium",
+            Alias = ""
+        };
+
+        // Act & Assert
+        Assert.Equal("hf:microsoft/DialoGPT-medium", model.Key);
+    }
+}

@@ -68,13 +68,34 @@ internal class HostService : IHostService, IAsyncDisposable
     {
         try
         {
-            var result = await _depot.DownloadModelAsync(modelKey, null, cancellationToken);
-            var progress = await _depot.GetDownloadProgressAsync(modelKey, cancellationToken);
-            return DownloadOperationResult.CreateSuccess($"Download started for {modelKey}", "Started", progress);
+            // Check if download is already in progress
+            var currentProgress = await _depot.GetDownloadProgressAsync(modelKey, cancellationToken);
+            if (currentProgress?.Status == ModelDownloadStatus.Downloading)
+            {
+                return DownloadOperationResult.CreateFailure($"Download already in progress for {modelKey}", "AlreadyInProgress");
+            }
+
+            // Start download in background - fire and forget
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    _logger.LogInformation("Starting background download for {ModelKey}", modelKey);
+                    await _depot.DownloadModelAsync(modelKey, null, CancellationToken.None);
+                    _logger.LogInformation("Background download completed successfully for {ModelKey}", modelKey);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Background download failed for {ModelKey}", modelKey);
+                }
+            }, CancellationToken.None);
+
+            // Return immediately with success status
+            return DownloadOperationResult.CreateSuccess($"Download started for {modelKey}", "Started");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to start download for {ModelKey}", modelKey);
+            _logger.LogError(ex, "Failed to initiate download for {ModelKey}", modelKey);
             return DownloadOperationResult.CreateFailure($"Failed to start download: {ex.Message}", "Failed");
         }
     }

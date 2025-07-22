@@ -1,5 +1,6 @@
 using LMSupplyDepots.Contracts;
 using LMSupplyDepots.Host.Models.OpenAI;
+using LMSupplyDepots.Host.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -16,14 +17,19 @@ namespace LMSupplyDepots.Host.Controllers;
 public class V1Controller : ControllerBase
 {
     private readonly IHostService _hostService;
+    private readonly IOpenAIConverterService _converterService;
     private readonly ILogger<V1Controller> _logger;
 
     /// <summary>
     /// Initializes a new instance of the V1Controller
     /// </summary>
-    public V1Controller(IHostService hostService, ILogger<V1Controller> logger)
+    public V1Controller(
+        IHostService hostService,
+        IOpenAIConverterService converterService,
+        ILogger<V1Controller> logger)
     {
         _hostService = hostService;
+        _converterService = converterService;
         _logger = logger;
     }
 
@@ -40,13 +46,7 @@ public class V1Controller : ControllerBase
 
             var response = new OpenAIModelsResponse
             {
-                Data = loadedModels.Select(m => new OpenAIModel
-                {
-                    Id = m.Key, // Use Key (alias if available, otherwise Id)
-                    Created = timestamp,
-                    OwnedBy = "local",
-                    Type = GetModelTypeString(m.Type)
-                }).ToList()
+                Data = loadedModels.Select(m => _converterService.ConvertToOpenAIModel(m, timestamp)).ToList()
             };
 
             return Ok(response);
@@ -66,6 +66,12 @@ public class V1Controller : ControllerBase
         [FromBody] OpenAIChatCompletionRequest request,
         CancellationToken cancellationToken)
     {
+        // Validate request object
+        if (request == null)
+        {
+            return BadRequest(CreateErrorResponse("invalid_request_error", "Request body is required"));
+        }
+
         // Validate request
         if (string.IsNullOrEmpty(request.Model))
         {
@@ -85,18 +91,26 @@ public class V1Controller : ControllerBase
                 return BadRequest(CreateErrorResponse("invalid_request_error", "Message role is required", "messages"));
             }
 
-            if (string.IsNullOrEmpty(message.Content))
+            // Content is required for most roles except assistant with tool_calls
+            if (message.Content == null &&
+                (message.Role.ToLowerInvariant() != "assistant" || message.ToolCalls == null || message.ToolCalls.Count == 0))
             {
                 return BadRequest(CreateErrorResponse("invalid_request_error", "Message content is required", "messages"));
             }
 
-            // Validate role values
-            var validRoles = new[] { "system", "user", "assistant" };
+            // Validate role values (including new roles)
+            var validRoles = new[] { "system", "user", "assistant", "tool", "developer" };
             if (!validRoles.Contains(message.Role.ToLowerInvariant()))
             {
                 return BadRequest(CreateErrorResponse("invalid_request_error",
                     $"Invalid message role '{message.Role}'. Must be one of: {string.Join(", ", validRoles)}",
                     "messages"));
+            }
+
+            // Validate tool message requirements
+            if (message.Role.ToLowerInvariant() == "tool" && string.IsNullOrEmpty(message.ToolCallId))
+            {
+                return BadRequest(CreateErrorResponse("invalid_request_error", "Tool messages must include tool_call_id", "messages"));
             }
         }
 
@@ -111,9 +125,9 @@ public class V1Controller : ControllerBase
             return BadRequest(CreateErrorResponse("invalid_request_error", "Top-p must be between 0 and 1", "top_p"));
         }
 
-        if (request.MaxTokens.HasValue && request.MaxTokens <= 0)
+        if (request.MaxCompletionTokens.HasValue && request.MaxCompletionTokens <= 0)
         {
-            return BadRequest(CreateErrorResponse("invalid_request_error", "Max tokens must be greater than 0", "max_tokens"));
+            return BadRequest(CreateErrorResponse("invalid_request_error", "Max completion tokens must be greater than 0", "max_completion_tokens"));
         }
 
         try
@@ -137,40 +151,10 @@ public class V1Controller : ControllerBase
             }
 
             // Convert OpenAI messages to prompt
-            var prompt = ConvertMessagesToPrompt(request.Messages);
-
-            // Convert to internal generation request
-            var generationRequest = new GenerationRequest
-            {
-                Model = request.Model,
-                Prompt = prompt,
-                MaxTokens = request.MaxTokens ?? 256,
-                Temperature = request.Temperature ?? 0.7f,
-                TopP = request.TopP ?? 0.95f,
-                Stream = request.Stream,
-                Parameters = new Dictionary<string, object?>()
-            };
-
-            // Add stop sequences if provided
-            if (request.Stop != null && request.Stop.Count > 0)
-            {
-                generationRequest.Parameters["stop"] = request.Stop;
-            }
-
-            // Add presence_penalty if provided
-            if (request.PresencePenalty.HasValue)
-            {
-                generationRequest.Parameters["presence_penalty"] = request.PresencePenalty.Value;
-            }
-
-            // Add frequency_penalty if provided
-            if (request.FrequencyPenalty.HasValue)
-            {
-                generationRequest.Parameters["frequency_penalty"] = request.FrequencyPenalty.Value;
-            }
+            var generationRequest = _converterService.ConvertToGenerationRequest(request);
 
             // Handle streaming requests
-            if (request.Stream)
+            if (request.Stream == true)
             {
                 return await CreateChatCompletionStream(request, generationRequest, cancellationToken);
             }
@@ -179,31 +163,9 @@ public class V1Controller : ControllerBase
             var generationResponse = await _hostService.GenerateTextAsync(request.Model, generationRequest, cancellationToken);
 
             // Convert to OpenAI response format
-            var response = new OpenAIChatCompletionResponse
-            {
-                Id = $"chatcmpl-{Guid.NewGuid():N}",
-                Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                Model = request.Model,
-                Choices = new List<OpenAIChatChoice>
-                {
-                    new OpenAIChatChoice
-                    {
-                        Index = 0,
-                        Message = new OpenAIChatMessage
-                        {
-                            Role = "assistant",
-                            Content = generationResponse.Text
-                        },
-                        FinishReason = ConvertFinishReason(generationResponse.FinishReason)
-                    }
-                },
-                Usage = new OpenAIUsage
-                {
-                    PromptTokens = generationResponse.PromptTokens,
-                    CompletionTokens = generationResponse.OutputTokens,
-                    TotalTokens = generationResponse.PromptTokens + generationResponse.OutputTokens
-                }
-            };
+            var completionId = $"chatcmpl-{Guid.NewGuid():N}";
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var response = _converterService.ConvertToOpenAIResponse(generationResponse, request.Model, completionId, timestamp);
 
             return Ok(response);
         }
@@ -222,6 +184,12 @@ public class V1Controller : ControllerBase
         [FromBody] OpenAIEmbeddingRequest request,
         CancellationToken cancellationToken)
     {
+        // Validate request object
+        if (request == null)
+        {
+            return BadRequest(CreateErrorResponse("invalid_request_error", "Request body is required"));
+        }
+
         // Validate request
         if (string.IsNullOrEmpty(request.Model))
         {
@@ -258,38 +226,13 @@ public class V1Controller : ControllerBase
             }
 
             // Convert input to string array
-            var texts = ConvertInputToTexts(request.Input);
-            if (texts.Count == 0)
-            {
-                return BadRequest(CreateErrorResponse("invalid_request_error", "Input must contain at least one text", "input"));
-            }
-
-            // Convert to internal embedding request
-            var embeddingRequest = new EmbeddingRequest
-            {
-                Model = request.Model,
-                Texts = texts,
-                Normalize = false
-            };
+            var embeddingRequest = _converterService.ConvertToEmbeddingRequest(request);
 
             // Generate embeddings
             var embeddingResponse = await _hostService.GenerateEmbeddingsAsync(request.Model, embeddingRequest, cancellationToken);
 
             // Convert to OpenAI response format
-            var response = new OpenAIEmbeddingResponse
-            {
-                Model = request.Model,
-                Data = embeddingResponse.Embeddings.Select((embedding, index) => new OpenAIEmbeddingData
-                {
-                    Index = index,
-                    Embedding = embedding
-                }).ToList(),
-                Usage = new OpenAIUsage
-                {
-                    PromptTokens = embeddingResponse.TotalTokens,
-                    TotalTokens = embeddingResponse.TotalTokens
-                }
-            };
+            var response = _converterService.ConvertToOpenAIEmbeddingResponse(embeddingResponse, request.Model);
 
             return Ok(response);
         }
@@ -382,86 +325,6 @@ public class V1Controller : ControllerBase
     }
 
     /// <summary>
-    /// Converts OpenAI messages to a single prompt string
-    /// </summary>
-    private string ConvertMessagesToPrompt(List<OpenAIChatMessage> messages)
-    {
-        var promptParts = new List<string>();
-
-        foreach (var message in messages)
-        {
-            switch (message.Role.ToLowerInvariant())
-            {
-                case "system":
-                    promptParts.Add($"System: {message.Content}");
-                    break;
-                case "user":
-                    promptParts.Add($"User: {message.Content}");
-                    break;
-                case "assistant":
-                    promptParts.Add($"Assistant: {message.Content}");
-                    break;
-                default:
-                    promptParts.Add($"{message.Role}: {message.Content}");
-                    break;
-            }
-        }
-
-        return string.Join("\n\n", promptParts) + "\n\nAssistant:";
-    }
-
-    /// <summary>
-    /// Converts OpenAI input to list of texts
-    /// </summary>
-    private List<string> ConvertInputToTexts(object input)
-    {
-        var texts = new List<string>();
-
-        if (input is string singleText)
-        {
-            texts.Add(singleText);
-        }
-        else if (input is JsonElement jsonElement)
-        {
-            if (jsonElement.ValueKind == JsonValueKind.String)
-            {
-                texts.Add(jsonElement.GetString() ?? string.Empty);
-            }
-            else if (jsonElement.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in jsonElement.EnumerateArray())
-                {
-                    if (item.ValueKind == JsonValueKind.String)
-                    {
-                        texts.Add(item.GetString() ?? string.Empty);
-                    }
-                }
-            }
-        }
-        else if (input is IEnumerable<string> stringArray)
-        {
-            texts.AddRange(stringArray);
-        }
-
-        return texts;
-    }
-
-    /// <summary>
-    /// Converts internal finish reason to OpenAI format
-    /// </summary>
-    private string? ConvertFinishReason(string finishReason)
-    {
-        return finishReason.ToLowerInvariant() switch
-        {
-            "length" => "length",
-            "stop" => "stop",
-            "eos" => "stop",
-            "" => "stop",
-            _ => "stop"
-        };
-    }
-
-    /// <summary>
     /// Creates an OpenAI-compatible error response
     /// </summary>
     private OpenAIErrorResponse CreateErrorResponse(string type, string message, string? param = null, string? code = null)
@@ -475,19 +338,6 @@ public class V1Controller : ControllerBase
                 Param = param,
                 Code = code
             }
-        };
-    }
-
-    /// <summary>
-    /// Converts model type enum to OpenAI-compatible string
-    /// </summary>
-    private static string GetModelTypeString(LMSupplyDepots.Models.ModelType modelType)
-    {
-        return modelType switch
-        {
-            LMSupplyDepots.Models.ModelType.TextGeneration => "text-generation",
-            LMSupplyDepots.Models.ModelType.Embedding => "embedding",
-            _ => "unknown"
         };
     }
 }

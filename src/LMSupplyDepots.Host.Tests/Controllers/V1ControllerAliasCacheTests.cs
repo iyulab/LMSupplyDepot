@@ -6,6 +6,7 @@ using LMSupplyDepots.Host;
 using LMSupplyDepots.Models;
 using LMSupplyDepots.Host.Models.OpenAI;
 using Xunit;
+using LMSupplyDepots.Host.Services;
 
 namespace LMSupplyDepots.Host.Tests.Controllers;
 
@@ -15,14 +16,16 @@ namespace LMSupplyDepots.Host.Tests.Controllers;
 public class V1ControllerAliasCacheTests
 {
     private readonly Mock<IHostService> _mockHostService;
+    private readonly Mock<IOpenAIConverterService> _mockConverter;
     private readonly Mock<ILogger<V1Controller>> _mockLogger;
     private readonly V1Controller _controller;
 
     public V1ControllerAliasCacheTests()
     {
         _mockHostService = new Mock<IHostService>();
+        _mockConverter = new Mock<IOpenAIConverterService>();
         _mockLogger = new Mock<ILogger<V1Controller>>();
-        _controller = new V1Controller(_mockHostService.Object, _mockLogger.Object);
+        _controller = new V1Controller(_mockHostService.Object, _mockConverter.Object, _mockLogger.Object);
     }
 
     [Fact]

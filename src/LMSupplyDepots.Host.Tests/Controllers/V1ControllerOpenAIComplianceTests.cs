@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using LMSupplyDepots.Host.Controllers;
 using LMSupplyDepots.Host;
+using LMSupplyDepots.Host.Services;
 using LMSupplyDepots.Models;
 using LMSupplyDepots.Contracts;
 using LMSupplyDepots.Host.Models.OpenAI;
@@ -17,14 +18,16 @@ namespace LMSupplyDepots.Host.Tests.Controllers;
 public class V1ControllerOpenAIComplianceTests
 {
     private readonly Mock<IHostService> _mockHostService;
+    private readonly Mock<IOpenAIConverterService> _mockConverterService;
     private readonly Mock<ILogger<V1Controller>> _mockLogger;
     private readonly V1Controller _controller;
 
     public V1ControllerOpenAIComplianceTests()
     {
         _mockHostService = new Mock<IHostService>();
+        _mockConverterService = new Mock<IOpenAIConverterService>();
         _mockLogger = new Mock<ILogger<V1Controller>>();
-        _controller = new V1Controller(_mockHostService.Object, _mockLogger.Object);
+        _controller = new V1Controller(_mockHostService.Object, _mockConverterService.Object, _mockLogger.Object);
     }
 
     #region Chat Completions Tests
@@ -41,7 +44,7 @@ public class V1ControllerOpenAIComplianceTests
             {
                 new() { Role = "user", Content = "Hello" }
             },
-            MaxTokens = 50,
+            MaxCompletionTokens = 50,
             Temperature = 0.7f,
             TopP = 0.95f
         };

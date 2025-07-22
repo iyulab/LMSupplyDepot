@@ -1,0 +1,107 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using LMSupplyDepots.Host.Models.OpenAI;
+
+namespace LMSupplyDepots.Host.Converters;
+
+/// <summary>
+/// JSON converter for ContentPart that handles both string and object formats
+/// </summary>
+public class ContentPartConverter : JsonConverter<ContentPart?>
+{
+    public override ContentPart? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+            return null;
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var text = reader.GetString();
+            return string.IsNullOrEmpty(text) ? null : new TextContentPart { Text = text };
+        }
+
+        if (reader.TokenType == JsonTokenType.StartObject)
+        {
+            using var doc = JsonDocument.ParseValue(ref reader);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("type", out var typeProperty))
+            {
+                var contentType = typeProperty.GetString();
+                return contentType switch
+                {
+                    "text" => JsonSerializer.Deserialize<TextContentPart>(root.GetRawText(), options),
+                    "image_url" => JsonSerializer.Deserialize<ImageContentPart>(root.GetRawText(), options),
+                    _ => throw new JsonException($"Unknown content type: {contentType}")
+                };
+            }
+
+            // If no type property, assume it's a text content part
+            if (root.TryGetProperty("text", out var textProperty))
+            {
+                return new TextContentPart { Text = textProperty.GetString() ?? string.Empty };
+            }
+        }
+
+        throw new JsonException($"Unable to convert JSON token type {reader.TokenType} to ContentPart");
+    }
+
+    public override void Write(Utf8JsonWriter writer, ContentPart? value, JsonSerializerOptions options)
+    {
+        if (value == null)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        JsonSerializer.Serialize(writer, value, value.GetType(), options);
+    }
+}
+
+/// <summary>
+/// JSON converter for StopSequence that handles both string and array formats
+/// </summary>
+public class StopSequenceConverter : JsonConverter<StopSequence?>
+{
+    public override StopSequence? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+            return null;
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var value = reader.GetString();
+            return string.IsNullOrEmpty(value) ? null : new StopSequence { Single = value };
+        }
+
+        if (reader.TokenType == JsonTokenType.StartArray)
+        {
+            var list = JsonSerializer.Deserialize<List<string>>(ref reader, options);
+            return list == null || list.Count == 0 ? null : new StopSequence { Multiple = list };
+        }
+
+        throw new JsonException($"Unable to convert JSON token type {reader.TokenType} to StopSequence");
+    }
+
+    public override void Write(Utf8JsonWriter writer, StopSequence? value, JsonSerializerOptions options)
+    {
+        if (value == null)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        if (value.Single != null)
+        {
+            writer.WriteStringValue(value.Single);
+        }
+        else if (value.Multiple != null)
+        {
+            JsonSerializer.Serialize(writer, value.Multiple, options);
+        }
+        else
+        {
+            writer.WriteNullValue();
+        }
+    }
+}

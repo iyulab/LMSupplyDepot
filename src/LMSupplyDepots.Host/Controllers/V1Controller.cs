@@ -1,6 +1,5 @@
 using LMSupplyDepots.Contracts;
-using LMSupplyDepots.Host.Models.OpenAI;
-using LMSupplyDepots.Host.Services;
+using LMSupplyDepots.SDK.OpenAI.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -17,7 +16,6 @@ namespace LMSupplyDepots.Host.Controllers;
 public class V1Controller : ControllerBase
 {
     private readonly IHostService _hostService;
-    private readonly IOpenAIConverterService _converterService;
     private readonly ILogger<V1Controller> _logger;
 
     /// <summary>
@@ -25,11 +23,9 @@ public class V1Controller : ControllerBase
     /// </summary>
     public V1Controller(
         IHostService hostService,
-        IOpenAIConverterService converterService,
         ILogger<V1Controller> logger)
     {
         _hostService = hostService;
-        _converterService = converterService;
         _logger = logger;
     }
 
@@ -37,18 +33,11 @@ public class V1Controller : ControllerBase
     /// Lists all available models (OpenAI-compatible)
     /// </summary>
     [HttpGet("models")]
-    public async Task<ActionResult<OpenAIModelsResponse>> ListModels(CancellationToken cancellationToken)
+    public async Task<ActionResult> ListModels(CancellationToken cancellationToken)
     {
         try
         {
-            var loadedModels = await _hostService.GetLoadedModelsAsync(cancellationToken);
-            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
-            var response = new OpenAIModelsResponse
-            {
-                Data = loadedModels.Select(m => _converterService.ConvertToOpenAIModel(m, timestamp)).ToList()
-            };
-
+            var response = await _hostService.ListModelsOpenAIAsync(cancellationToken);
             return Ok(response);
         }
         catch (Exception ex)
@@ -132,41 +121,14 @@ public class V1Controller : ControllerBase
 
         try
         {
-            // Check if the model exists
-            var model = await _hostService.GetModelAsync(request.Model, cancellationToken);
-            if (model == null)
-            {
-                return NotFound(CreateErrorResponse("model_not_found", $"Model '{request.Model}' not found", "model"));
-            }
-
-            if (model.IsLoaded == false)
-            {
-                return NotFound(CreateErrorResponse("model_not_found", $"Model '{request.Model}' is not loaded", "model"));
-            }
-
-            // Check if the model supports text generation
-            if (!model.Capabilities.SupportsTextGeneration)
-            {
-                return BadRequest(CreateErrorResponse("invalid_request_error", $"Model '{request.Model}' does not support text generation", "model"));
-            }
-
-            // Convert OpenAI messages to prompt
-            var generationRequest = _converterService.ConvertToGenerationRequest(request);
-
             // Handle streaming requests
             if (request.Stream == true)
             {
-                return await CreateChatCompletionStream(request, generationRequest, cancellationToken);
+                return await CreateChatCompletionStream(request, cancellationToken);
             }
 
-            // Generate text
-            var generationResponse = await _hostService.GenerateTextAsync(request.Model, generationRequest, cancellationToken);
-
-            // Convert to OpenAI response format
-            var completionId = $"chatcmpl-{Guid.NewGuid():N}";
-            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            var response = _converterService.ConvertToOpenAIResponse(generationResponse, request.Model, completionId, timestamp);
-
+            // Use HostService OpenAI method
+            var response = await _hostService.CreateChatCompletionAsync(request, cancellationToken);
             return Ok(response);
         }
         catch (Exception ex)
@@ -180,7 +142,7 @@ public class V1Controller : ControllerBase
     /// Creates embeddings for the provided input (OpenAI-compatible)
     /// </summary>
     [HttpPost("embeddings")]
-    public async Task<ActionResult<OpenAIEmbeddingResponse>> CreateEmbeddings(
+    public async Task<ActionResult> CreateEmbeddings(
         [FromBody] OpenAIEmbeddingRequest request,
         CancellationToken cancellationToken)
     {
@@ -203,37 +165,8 @@ public class V1Controller : ControllerBase
 
         try
         {
-            // Check if the model exists
-            var model = await _hostService.GetModelAsync(request.Model, cancellationToken);
-            if (model == null)
-            {
-                return NotFound(CreateErrorResponse("model_not_found", $"Model '{request.Model}' not found", "model"));
-            }
-
-            if (model.IsLoaded == false)
-            {
-                return NotFound(CreateErrorResponse("model_not_found", $"Model '{request.Model}' is not loaded", "model"));
-            }
-
-            // Check if the model supports embeddings
-            if (!model.Capabilities.SupportsEmbeddings)
-            {
-                // Some text generation models can be used for embeddings via hidden states
-                // For now, return a more informative error
-                return BadRequest(CreateErrorResponse("model_not_supported",
-                    $"Model '{request.Model}' does not support embeddings. Only embedding-specific models are currently supported.",
-                    "model"));
-            }
-
-            // Convert input to string array
-            var embeddingRequest = _converterService.ConvertToEmbeddingRequest(request);
-
-            // Generate embeddings
-            var embeddingResponse = await _hostService.GenerateEmbeddingsAsync(request.Model, embeddingRequest, cancellationToken);
-
-            // Convert to OpenAI response format
-            var response = _converterService.ConvertToOpenAIEmbeddingResponse(embeddingResponse, request.Model);
-
+            // Use HostService OpenAI method
+            var response = await _hostService.CreateEmbeddingsAsync(request, cancellationToken);
             return Ok(response);
         }
         catch (Exception ex)
@@ -248,7 +181,6 @@ public class V1Controller : ControllerBase
     /// </summary>
     private async Task<ActionResult> CreateChatCompletionStream(
         OpenAIChatCompletionRequest request,
-        GenerationRequest generationRequest,
         CancellationToken cancellationToken)
     {
         try
@@ -261,8 +193,8 @@ public class V1Controller : ControllerBase
             var completionId = $"chatcmpl-{Guid.NewGuid():N}";
             var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            // Stream the generated text
-            await foreach (var token in _hostService.GenerateTextStreamAsync(request.Model, generationRequest, cancellationToken))
+            // Stream the generated text using HostService
+            await foreach (var token in _hostService.CreateChatCompletionStreamAsync(request, cancellationToken))
             {
                 var streamResponse = new
                 {

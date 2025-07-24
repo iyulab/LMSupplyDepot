@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace LMSupplyDepots.SDK;
 
@@ -82,6 +83,32 @@ public partial class LMSupplyDepot : IDisposable
 
         // Configure ModelLoader services
         ConfigureModelLoaderServices(services);
+
+        // Configure OpenAI compatibility services
+        ConfigureOpenAIServices(services);
+
+        // Configure Tools services
+        ConfigureToolsServices(services);
+    }
+
+    /// <summary>
+    /// Configures OpenAI compatibility services
+    /// </summary>
+    private void ConfigureOpenAIServices(IServiceCollection services)
+    {
+        services.TryAddScoped<SDK.OpenAI.Services.IOpenAIConverterService, SDK.OpenAI.Services.OpenAIConverterService>();
+    }
+
+    /// <summary>
+    /// Configures Tools services
+    /// </summary>
+    private void ConfigureToolsServices(IServiceCollection services)
+    {
+        services.TryAddSingleton<SDK.Tools.IToolService, SDK.Tools.ToolService>();
+
+        // Register built-in tools
+        services.TryAddSingleton<SDK.Tools.IFunctionTool, SDK.Tools.GetWeatherTool>();
+        services.TryAddSingleton<SDK.Tools.IFunctionTool, SDK.Tools.CalculatorTool>();
     }
 
     /// <summary>

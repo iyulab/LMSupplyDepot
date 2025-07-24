@@ -1,4 +1,4 @@
-﻿using LMSupplyDepots.Inference.Adapters;
+using LMSupplyDepots.Inference.Adapters;
 using LMSupplyDepots.Inference.Configuration;
 using LMSupplyDepots.Inference.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,7 +51,7 @@ public static class ServiceExtensions
         services.AddSingleton<BaseModelAdapter, LLamaAdapter>();
 
         // Add debug logging - will be available when logger is resolved
-        Console.WriteLine("[DEBUG] LLamaAdapter registered as BaseModelAdapter");
+        Debug.WriteLine("[DEBUG] LLamaAdapter registered as BaseModelAdapter");
 
         return services;
     }

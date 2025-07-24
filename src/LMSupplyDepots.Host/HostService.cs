@@ -3,6 +3,7 @@ using LMSupplyDepots.ModelHub;
 using LMSupplyDepots.Inference;
 using LMSupplyDepots.Interfaces;
 using LMSupplyDepots.SDK;
+using LMSupplyDepots.SDK.OpenAI.Models;
 
 namespace LMSupplyDepots.Host;
 
@@ -230,6 +231,36 @@ internal class HostService : IHostService, IAsyncDisposable
         string modelId, IReadOnlyList<string> texts, bool normalize = false,
         Dictionary<string, object?>? parameters = null, CancellationToken cancellationToken = default)
         => _depot.GenerateEmbeddingsAsync(modelId, texts, normalize, parameters, cancellationToken);
+
+    #endregion
+
+    #region OpenAI Compatibility
+
+    public async Task<object> ListModelsOpenAIAsync(CancellationToken cancellationToken = default)
+    {
+        var response = await _depot.ListModelsOpenAIAsync(cancellationToken);
+        return response;
+    }
+
+    public async Task<object> CreateChatCompletionAsync(object request, CancellationToken cancellationToken = default)
+    {
+        var typedRequest = (OpenAIChatCompletionRequest)request;
+        var response = await _depot.CreateChatCompletionAsync(typedRequest, cancellationToken);
+        return response;
+    }
+
+    public async Task<object> CreateEmbeddingsAsync(object request, CancellationToken cancellationToken = default)
+    {
+        var typedRequest = (OpenAIEmbeddingRequest)request;
+        var response = await _depot.CreateEmbeddingsAsync(typedRequest, cancellationToken);
+        return response;
+    }
+
+    public IAsyncEnumerable<string> CreateChatCompletionStreamAsync(object request, CancellationToken cancellationToken = default)
+    {
+        var typedRequest = (OpenAIChatCompletionRequest)request;
+        return _depot.CreateChatCompletionStreamAsync(typedRequest, cancellationToken);
+    }
 
     #endregion
 

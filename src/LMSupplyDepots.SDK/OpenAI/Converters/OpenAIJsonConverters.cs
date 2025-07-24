@@ -1,8 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using LMSupplyDepots.Host.Models.OpenAI;
+using LMSupplyDepots.SDK.OpenAI.Models;
 
-namespace LMSupplyDepots.Host.Converters;
+namespace LMSupplyDepots.SDK.OpenAI.Converters;
 
 /// <summary>
 /// JSON converter for ContentPart that handles both string and object formats
@@ -102,6 +102,51 @@ public class StopSequenceConverter : JsonConverter<StopSequence?>
         else
         {
             writer.WriteNullValue();
+        }
+    }
+}
+
+/// <summary>
+/// JSON converter for ToolChoice that handles both string and object formats
+/// </summary>
+public class ToolChoiceConverter : JsonConverter<ToolChoice?>
+{
+    public override ToolChoice? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+            return null;
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var value = reader.GetString();
+            return string.IsNullOrEmpty(value) ? null : new ToolChoice { Type = value };
+        }
+
+        if (reader.TokenType == JsonTokenType.StartObject)
+        {
+            return JsonSerializer.Deserialize<ToolChoice>(ref reader, options);
+        }
+
+        throw new JsonException($"Unable to convert JSON token type {reader.TokenType} to ToolChoice");
+    }
+
+    public override void Write(Utf8JsonWriter writer, ToolChoice? value, JsonSerializerOptions options)
+    {
+        if (value == null)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        // If it's a simple string type (like "auto", "none", "required"), write as string
+        if (value.Function == null && !string.IsNullOrEmpty(value.Type))
+        {
+            writer.WriteStringValue(value.Type);
+        }
+        else
+        {
+            // Otherwise, write as object
+            JsonSerializer.Serialize(writer, value, typeof(ToolChoice), options);
         }
     }
 }

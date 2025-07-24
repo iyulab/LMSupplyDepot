@@ -3,6 +3,8 @@ using Microsoft.Extensions.Options;
 using LMSupplyDepots.ModelHub.Repositories;
 using LMSupplyDepots.Inference.Services;
 using LMSupplyDepots.Inference.Adapters;
+using LMSupplyDepots.SDK.OpenAI.Services;
+using LMSupplyDepots.SDK.Tools;
 using System.Diagnostics;
 
 namespace LMSupplyDepots.SDK;
@@ -35,6 +37,12 @@ public static class ServiceCollectionExtensions
 
         // Configure ModelLoader services
         ConfigureModelLoaderServices(services);
+
+        // Configure OpenAI compatibility services
+        ConfigureOpenAIServices(services);
+
+        // Configure Tools services
+        ConfigureToolsServices(services);
 
         // Register the main LMSupplyDepot class using factory to use existing DI services
         services.AddSingleton<LMSupplyDepot>(provider =>
@@ -170,5 +178,25 @@ public static class ServiceCollectionExtensions
             return service;
         });
 
+    }
+
+    /// <summary>
+    /// Configures OpenAI compatibility services
+    /// </summary>
+    private static void ConfigureOpenAIServices(IServiceCollection services)
+    {
+        services.TryAddSingleton<IOpenAIConverterService, OpenAIConverterService>();
+    }
+
+    /// <summary>
+    /// Configures Tools services
+    /// </summary>
+    private static void ConfigureToolsServices(IServiceCollection services)
+    {
+        services.TryAddSingleton<IToolService, ToolService>();
+
+        // Register built-in tools
+        services.TryAddSingleton<IFunctionTool, GetWeatherTool>();
+        services.TryAddSingleton<IFunctionTool, CalculatorTool>();
     }
 }

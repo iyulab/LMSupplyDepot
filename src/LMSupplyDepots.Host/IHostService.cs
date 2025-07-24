@@ -82,6 +82,15 @@ public interface IHostService
     Task<EmbeddingResponse> GenerateEmbeddingsAsync(string modelId, IReadOnlyList<string> texts, bool normalize = false, Dictionary<string, object?>? parameters = null, CancellationToken cancellationToken = default);
 
     #endregion
+
+    #region OpenAI Compatibility
+
+    Task<object> ListModelsOpenAIAsync(CancellationToken cancellationToken = default);
+    Task<object> CreateChatCompletionAsync(object request, CancellationToken cancellationToken = default);
+    Task<object> CreateEmbeddingsAsync(object request, CancellationToken cancellationToken = default);
+    IAsyncEnumerable<string> CreateChatCompletionStreamAsync(object request, CancellationToken cancellationToken = default);
+
+    #endregion
 }
 
 /// <summary>

@@ -1,5 +1,6 @@
-﻿using OpenAI;
+using OpenAI;
 using OpenAI.Responses;
+using System.Diagnostics;
 
 namespace LMSupplyDepots.External.OpenAI.APIs;
 
@@ -23,7 +24,7 @@ public class QueryAPI
     /// </summary>
         public async Task<OpenAIResponse> QueryFilesAsync(string vectorStoreId, string query)
     {
-        Console.WriteLine($"Querying files with: \"{query}\"");
+        Debug.WriteLine($"Querying files with: \"{query}\"");
 
         try
         {
@@ -40,7 +41,7 @@ public class QueryAPI
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error querying files: {ex.Message}");
+            Debug.WriteLine($"Error querying files: {ex.Message}");
             throw;
         }
     }

@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
-using LMSupplyDepots.Host.Converters;
+using LMSupplyDepots.SDK.OpenAI.Converters;
 
-namespace LMSupplyDepots.Host.Models.OpenAI;
+namespace LMSupplyDepots.SDK.OpenAI.Models;
 
 /// <summary>
 /// OpenAI-compatible models list response
@@ -373,6 +373,7 @@ public class StreamOptions
 /// <summary>
 /// Tool choice specification
 /// </summary>
+[JsonConverter(typeof(ToolChoiceConverter))]
 public class ToolChoice
 {
     public static implicit operator ToolChoice(string value) => new() { Type = value };

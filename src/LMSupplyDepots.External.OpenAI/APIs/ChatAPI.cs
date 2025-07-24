@@ -1,5 +1,6 @@
-﻿using OpenAI;
+using OpenAI;
 using OpenAI.Responses;
+using System.Diagnostics;
 using System.Text;
 
 namespace LMSupplyDepots.External.OpenAI.APIs;
@@ -24,7 +25,7 @@ public class ChatAPI
     /// </summary>
         public async Task<string> SendMessageAsync(string message, string? systemPrompt = null)
     {
-        Console.WriteLine($"Sending message to OpenAI: \"{message}\"");
+        Debug.WriteLine($"Sending message to OpenAI: \"{message}\"");
 
         try
         {
@@ -47,13 +48,13 @@ public class ChatAPI
 
             // Extract the response text
             string responseText = response.Value.GetOutputText();
-            Console.WriteLine($"Response received from OpenAI");
+            Debug.WriteLine($"Response received from OpenAI");
 
             return responseText;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error sending message: {ex.Message}");
+            Debug.WriteLine($"Error sending message: {ex.Message}");
             throw;
         }
     }
@@ -63,7 +64,7 @@ public class ChatAPI
     /// </summary>
     public async Task<string> SendConversationAsync(List<(string role, string content)> messages)
     {
-        Console.WriteLine($"Sending conversation with {messages.Count} messages to OpenAI");
+        Debug.WriteLine($"Sending conversation with {messages.Count} messages to OpenAI");
 
         try
         {
@@ -77,13 +78,13 @@ public class ChatAPI
 
             // Extract the response text
             string responseText = response.Value.GetOutputText();
-            Console.WriteLine($"Response received from OpenAI");
+            Debug.WriteLine($"Response received from OpenAI");
 
             return responseText;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error sending conversation: {ex.Message}");
+            Debug.WriteLine($"Error sending conversation: {ex.Message}");
             throw;
         }
     }
@@ -93,7 +94,7 @@ public class ChatAPI
     /// </summary>
             public async Task<string> StreamMessageAsync(string message, string? systemPrompt = null, Action<string>? onUpdate = null)
     {
-        Console.WriteLine($"Streaming message to OpenAI: \"{message}\"");
+        Debug.WriteLine($"Streaming message to OpenAI: \"{message}\"");
 
         try
         {
@@ -114,7 +115,7 @@ public class ChatAPI
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error streaming message: {ex.Message}");
+            Debug.WriteLine($"Error streaming message: {ex.Message}");
             throw;
         }
     }
@@ -124,7 +125,7 @@ public class ChatAPI
     /// </summary>
         public async Task<string> StreamConversationAsync(List<(string role, string content)> messages, Action<string>? onUpdate = null)
     {
-        Console.WriteLine($"Streaming conversation with {messages.Count} messages to OpenAI");
+        Debug.WriteLine($"Streaming conversation with {messages.Count} messages to OpenAI");
 
         try
         {
@@ -136,7 +137,7 @@ public class ChatAPI
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error streaming conversation: {ex.Message}");
+            Debug.WriteLine($"Error streaming conversation: {ex.Message}");
             throw;
         }
     }
@@ -192,7 +193,7 @@ public class ChatAPI
         }
 
         string completeResponse = fullResponse.ToString();
-        Console.WriteLine($"Streaming response completed");
+        Debug.WriteLine($"Streaming response completed");
 
         return completeResponse;
     }

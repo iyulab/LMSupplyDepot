@@ -1,5 +1,4 @@
 using LMSupplyDepots.Host;
-using LMSupplyDepots.Host.Services;
 using LMSupplyDepots.SDK;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -33,9 +32,6 @@ public static class ServiceCollectionExtensions
 
         // Register host service (no longer using LMSupplyDepot wrapper)
         services.TryAddSingleton<IHostService, HostService>();
-
-        // Register OpenAI converter service
-        services.TryAddSingleton<IOpenAIConverterService, OpenAIConverterService>();
 
         return services;
     }

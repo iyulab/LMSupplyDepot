@@ -1,0 +1,272 @@
+### LMSupplyDepots Tools Test
+# Test tools functionality through Host API
+
+@baseUrl = http://localhost:5181
+
+@model = hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
+@alias = alias123
+
+### 1. List available models
+GET {{baseUrl}}/v1/models
+
+### 2. Chat completion with tools (weather tool)
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{model}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What's the weather like in Seoul, Korea?"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and country, e.g. San Francisco, CA"
+            },
+            "unit": {
+              "type": "string",
+              "enum": ["celsius", "fahrenheit"],
+              "description": "The temperature unit to use. Defaults to celsius."
+            }
+          },
+          "required": ["location"]
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "max_completion_tokens": 150,
+  "temperature": 0.7
+}
+
+### 3. Chat completion with calculator tool
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "alias123",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Calculate 25 * 4 + 120 / 6"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "calculator",
+        "description": "Perform mathematical calculations",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "string",
+              "description": "Mathematical expression to evaluate"
+            }
+          },
+          "required": ["expression"]
+        }
+      }
+    }
+  ],
+  "max_completion_tokens": 150,
+  "temperature": 0.1
+}
+
+### 4. Chat completion with multiple tools available
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "alias123", 
+  "messages": [
+    {
+      "role": "user",
+      "content": "What's the weather in Tokyo and calculate the percentage if it's 23 degrees out of a max of 30 degrees?"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and country, e.g. San Francisco, CA"
+            },
+            "unit": {
+              "type": "string",
+              "enum": ["celsius", "fahrenheit"],
+              "description": "The temperature unit to use. Defaults to celsius."
+            }
+          },
+          "required": ["location"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "calculator",
+        "description": "Perform mathematical calculations",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "string",
+              "description": "Mathematical expression to evaluate"
+            }
+          },
+          "required": ["expression"]
+        }
+      }
+    }
+  ],
+  "max_completion_tokens": 200,
+  "temperature": 0.7
+}
+
+### 5. Chat completion without tools (regular chat)
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "alias123",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello! How are you today?"
+    }
+  ],
+  "max_completion_tokens": 100,
+  "temperature": 0.7
+}
+
+### 6. Streaming chat completion with tools
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "alias123",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What's the weather in New York and tell me a joke about it?"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and country, e.g. San Francisco, CA"
+            },
+            "unit": {
+              "type": "string",
+              "enum": ["celsius", "fahrenheit"],
+              "description": "The temperature unit to use. Defaults to celsius."
+            }
+          },
+          "required": ["location"]
+        }
+      }
+    }
+  ],
+  "stream": true,
+  "max_completion_tokens": 200,
+  "temperature": 0.8
+}
+
+### 7. Test tool call handling - conversation with tool result
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "alias123",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What's the weather in London?"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_12345",
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "arguments": "{\"location\": \"London, UK\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_12345",
+      "content": "{\"location\": \"London, UK\", \"temperature\": 15, \"condition\": \"Partly cloudy\", \"humidity\": 65, \"wind_speed\": 10}"
+    },
+    {
+      "role": "user", 
+      "content": "Based on this weather, should I take an umbrella?"
+    }
+  ],
+  "max_completion_tokens": 100,
+  "temperature": 0.7
+}
+
+### 8. Test invalid tool call
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "alias123",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Call an invalid tool please"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "invalid_tool",
+        "description": "This tool doesn't exist",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "param": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "max_completion_tokens": 100,
+  "temperature": 0.7
+}

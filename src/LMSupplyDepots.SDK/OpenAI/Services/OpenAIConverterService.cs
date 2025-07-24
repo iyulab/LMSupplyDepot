@@ -1,9 +1,9 @@
-using LMSupplyDepots.Host.Models.OpenAI;
+using LMSupplyDepots.SDK.OpenAI.Models;
 using LMSupplyDepots.Models;
 using LMSupplyDepots.Contracts;
 using System.Text.Json;
 
-namespace LMSupplyDepots.Host.Services;
+namespace LMSupplyDepots.SDK.OpenAI.Services;
 
 /// <summary>
 /// Service for converting between OpenAI API format and internal LLama/model formats

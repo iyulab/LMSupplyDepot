@@ -1,5 +1,6 @@
-﻿using OpenAI;
+using OpenAI;
 using OpenAI.Files;
+using System.Diagnostics;
 
 namespace LMSupplyDepots.External.OpenAI.APIs;
 
@@ -23,7 +24,7 @@ public class FileAPI
     /// </summary>
     public async Task<OpenAIFile> UploadFileAsync(string filePath)
     {
-        Console.WriteLine($"Uploading file: {Path.GetFileName(filePath)}");
+        Debug.WriteLine($"Uploading file: {Path.GetFileName(filePath)}");
 
         try
         {
@@ -34,12 +35,12 @@ public class FileAPI
             // Access the Value property to get the actual OpenAIFile
             OpenAIFile file = fileResult.Value;
 
-            Console.WriteLine($"File uploaded successfully. ID: {file.Id}");
+            Debug.WriteLine($"File uploaded successfully. ID: {file.Id}");
             return file;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error uploading file: {ex.Message}");
+            Debug.WriteLine($"Error uploading file: {ex.Message}");
             throw;
         }
     }
@@ -55,7 +56,7 @@ public class FileAPI
         {
             if (!File.Exists(filePath))
             {
-                Console.WriteLine($"File not found: {filePath}");
+                Debug.WriteLine($"File not found: {filePath}");
                 continue;
             }
 
@@ -81,7 +82,7 @@ public class FileAPI
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error listing files: {ex.Message}");
+            Debug.WriteLine($"Error listing files: {ex.Message}");
             throw;
         }
     }
@@ -94,12 +95,12 @@ public class FileAPI
         try
         {
             await _fileClient.DeleteFileAsync(fileId);
-            Console.WriteLine($"File {fileId} deleted successfully");
+            Debug.WriteLine($"File {fileId} deleted successfully");
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error deleting file {fileId}: {ex.Message}");
+            Debug.WriteLine($"Error deleting file {fileId}: {ex.Message}");
             return false;
         }
     }

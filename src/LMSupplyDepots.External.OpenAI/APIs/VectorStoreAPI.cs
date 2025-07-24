@@ -1,7 +1,8 @@
-﻿#pragma warning disable OPENAI001 // Suppress experimental API warnings
+#pragma warning disable OPENAI001 // Suppress experimental API warnings
 using OpenAI;
 using OpenAI.VectorStores;
 using System.ClientModel.Primitives;
+using System.Diagnostics;
 
 namespace LMSupplyDepots.External.OpenAI.APIs;
 
@@ -26,7 +27,7 @@ public class VectorStoreAPI
         public async Task<VectorStore> CreateVectorStoreAsync(IEnumerable<string> fileIds, string? name = null)
     {
         var storeName = name ?? $"vectorstore-{DateTime.UtcNow:yyyyMMddHHmmss}";
-        Console.WriteLine($"Creating vector store: {storeName}");
+        Debug.WriteLine($"Creating vector store: {storeName}");
 
         try
         {
@@ -51,7 +52,7 @@ public class VectorStoreAPI
             var vectorStore = operation.Value;
             if (vectorStore != null)
             {
-                Console.WriteLine($"Vector store created successfully. ID: {vectorStore.Id}");
+                Debug.WriteLine($"Vector store created successfully. ID: {vectorStore.Id}");
                 return vectorStore;
             }
             else
@@ -61,7 +62,7 @@ public class VectorStoreAPI
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error creating vector store: {ex.Message}");
+            Debug.WriteLine($"Error creating vector store: {ex.Message}");
             throw;
         }
     }
@@ -76,7 +77,7 @@ public class VectorStoreAPI
         int maxAttempts = 30,
         int delaySeconds = 5)
     {
-        Console.WriteLine($"Waiting for vector store {vectorStoreId} to be processed...");
+        Debug.WriteLine($"Waiting for vector store {vectorStoreId} to be processed...");
 
         int attempts = 0;
 
@@ -92,7 +93,7 @@ public class VectorStoreAPI
 
                 if (vectorStore == null)
                 {
-                    Console.WriteLine("Vector store not found or result is null");
+                    Debug.WriteLine("Vector store not found or result is null");
                     await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
                     continue;
                 }
@@ -100,22 +101,22 @@ public class VectorStoreAPI
                 // Check for Completed status
                 if (vectorStore.Status == VectorStoreStatus.Completed)
                 {
-                    Console.WriteLine("Vector store processing completed successfully!");
+                    Debug.WriteLine("Vector store processing completed successfully!");
                     return vectorStore;
                 }
 
                 // Check for Expired status - can use this instead of "Failed"
                 if (vectorStore.Status == VectorStoreStatus.Expired)
                 {
-                    Console.WriteLine($"Vector store processing expired");
+                    Debug.WriteLine($"Vector store processing expired");
                     throw new Exception($"Vector store processing expired");
                 }
 
-                Console.WriteLine($"Vector store status: {vectorStore.Status}. Waiting {delaySeconds} seconds...");
+                Debug.WriteLine($"Vector store status: {vectorStore.Status}. Waiting {delaySeconds} seconds...");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error checking vector store status: {ex.Message}");
+                Debug.WriteLine($"Error checking vector store status: {ex.Message}");
             }
 
             await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
@@ -145,7 +146,7 @@ public class VectorStoreAPI
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error listing vector stores: {ex.Message}");
+            Debug.WriteLine($"Error listing vector stores: {ex.Message}");
             throw;
         }
     }
@@ -160,16 +161,16 @@ public class VectorStoreAPI
             var result = await _vectorStoreClient.DeleteVectorStoreAsync(vectorStoreId);
             if (result?.Value == null)
             {
-                Console.WriteLine($"Delete operation for vector store {vectorStoreId} returned null result");
+                Debug.WriteLine($"Delete operation for vector store {vectorStoreId} returned null result");
                 return false;
             }
 
-            Console.WriteLine($"Vector store {vectorStoreId} deleted successfully");
+            Debug.WriteLine($"Vector store {vectorStoreId} deleted successfully");
             return result.Value.Deleted;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error deleting vector store {vectorStoreId}: {ex.Message}");
+            Debug.WriteLine($"Error deleting vector store {vectorStoreId}: {ex.Message}");
             return false;
         }
     }
@@ -179,7 +180,7 @@ public class VectorStoreAPI
     /// </summary>
         public async Task<VectorStoreFileAssociation> AddFileToVectorStoreAsync(string vectorStoreId, string fileId)
     {
-        Console.WriteLine($"Adding file {fileId} to vector store {vectorStoreId}");
+        Debug.WriteLine($"Adding file {fileId} to vector store {vectorStoreId}");
 
         try
         {
@@ -191,12 +192,12 @@ public class VectorStoreAPI
 
             // Get the file association result
             var fileAssociation = operation.Value ?? throw new InvalidOperationException($"Failed to add file {fileId} to vector store {vectorStoreId} - operation returned null");
-            Console.WriteLine($"File {fileId} added to vector store {vectorStoreId}");
+            Debug.WriteLine($"File {fileId} added to vector store {vectorStoreId}");
             return fileAssociation;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error adding file to vector store: {ex.Message}");
+            Debug.WriteLine($"Error adding file to vector store: {ex.Message}");
             throw;
         }
     }
@@ -206,7 +207,7 @@ public class VectorStoreAPI
     /// </summary>
         public async Task<bool> RemoveFileFromVectorStoreAsync(string vectorStoreId, string fileId)
     {
-        Console.WriteLine($"Removing file {fileId} from vector store {vectorStoreId}");
+        Debug.WriteLine($"Removing file {fileId} from vector store {vectorStoreId}");
 
         try
         {
@@ -214,16 +215,16 @@ public class VectorStoreAPI
             var result = await _vectorStoreClient.RemoveFileFromStoreAsync(vectorStoreId, fileId);
             if (result?.Value == null)
             {
-                Console.WriteLine($"Remove operation for file {fileId} from vector store {vectorStoreId} returned null result");
+                Debug.WriteLine($"Remove operation for file {fileId} from vector store {vectorStoreId} returned null result");
                 return false;
             }
 
-            Console.WriteLine($"File {fileId} removed from vector store {vectorStoreId}: {result.Value.Removed}");
+            Debug.WriteLine($"File {fileId} removed from vector store {vectorStoreId}: {result.Value.Removed}");
             return result.Value.Removed;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error removing file from vector store: {ex.Message}");
+            Debug.WriteLine($"Error removing file from vector store: {ex.Message}");
             return false;
         }
     }
@@ -259,7 +260,7 @@ public class VectorStoreAPI
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error listing vector store files: {ex.Message}");
+            Debug.WriteLine($"Error listing vector store files: {ex.Message}");
             throw;
         }
     }
@@ -269,7 +270,7 @@ public class VectorStoreAPI
     /// </summary>
         public async Task<VectorStoreBatchFileJob> AddFilesToVectorStoreAsync(string vectorStoreId, IEnumerable<string> fileIds)
     {
-        Console.WriteLine($"Adding {fileIds.Count()} files to vector store {vectorStoreId} as a batch");
+        Debug.WriteLine($"Adding {fileIds.Count()} files to vector store {vectorStoreId} as a batch");
 
         try
         {
@@ -281,12 +282,12 @@ public class VectorStoreAPI
 
             // Get the initial batch job information
             var batchJob = operation.Value ?? throw new InvalidOperationException($"Failed to add files to vector store {vectorStoreId} - operation returned null");
-            Console.WriteLine($"Batch file job created. ID: {batchJob.BatchId}");
+            Debug.WriteLine($"Batch file job created. ID: {batchJob.BatchId}");
             return batchJob;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error adding files to vector store as batch: {ex.Message}");
+            Debug.WriteLine($"Error adding files to vector store as batch: {ex.Message}");
             throw;
         }
     }

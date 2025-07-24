@@ -1,13 +1,19 @@
+using Microsoft.Extensions.Caching.Memory;
+
 namespace LMSupplyDepots.ModelHub.Repositories;
 
 /// <summary>
-/// Implementation of IModelRepository that directly scans the file system without caching
+/// Implementation of IModelRepository with file system scanning and memory caching
 /// </summary>
 public class FileSystemModelRepository : IModelRepository, IDisposable
 {
     private readonly string _baseDirectory;
     private readonly ILogger<FileSystemModelRepository> _logger;
     private readonly SemaphoreSlim _lock = new(1, 1);
+
+    private ConcurrentDictionary<string, string> _aliasList = [];
+    private ConcurrentDictionary<string, LMModel?> _modelCache = [];
+
     private bool _disposed;
 
     /// <summary>
@@ -27,28 +33,29 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
     }
 
     /// <summary>
-    /// Gets a model by its identifier or alias - scans file system directly
+    /// Gets a model by its identifier or alias - uses cache when possible
+    /// Always caches using the actual model ID to ensure consistency
     /// </summary>
-    public async Task<LMModel?> GetModelAsync(string keyOrId, CancellationToken cancellationToken = default)
+    public async Task<LMModel?> GetModelAsync(string idOrAlias, CancellationToken cancellationToken = default)
     {
-        // First try to find by ID
-        var model = await FindModelByIdAsync(keyOrId, cancellationToken);
+        var modelId = idOrAlias;
+        if (_aliasList.TryGetValue(idOrAlias, out var resolvedId))
+        {
+            modelId = resolvedId; // Use the resolved ID from alias list
+        }
+
+        var model = await FindModelByIdAsync(modelId, cancellationToken);
         if (model != null)
         {
+            _modelCache.TryAdd(modelId, model);
             return model;
         }
 
-        // Then try to find by alias by scanning all models
-        var allModels = await ScanAllModelsAsync(cancellationToken);
-        var modelByAlias = allModels.FirstOrDefault(m =>
-            !string.IsNullOrEmpty(m.Alias) &&
-            string.Equals(m.Alias, keyOrId, StringComparison.OrdinalIgnoreCase));
-
-        return modelByAlias;
+        return null;
     }
 
     /// <summary>
-    /// Lists models by directly scanning the file system
+    /// Lists models using cached results when possible
     /// </summary>
     public async Task<IReadOnlyList<LMModel>> ListModelsAsync(
         ModelType? type = null,
@@ -79,6 +86,7 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
 
         return query.OrderBy(m => m.Name).Skip(skip).Take(take).ToList();
     }
+
 
     /// <summary>
     /// Adds or updates a model in the repository
@@ -140,22 +148,22 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
     }
 
     /// <summary>
-    /// Removes a model from the repository by deleting its files
+    /// Removes a model from the repository by deleting its files (by ID or alias)
     /// </summary>
-    public async Task<bool> DeleteModelAsync(string modelId, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteModelAsync(string idOrAlias, CancellationToken cancellationToken = default)
     {
         await _lock.WaitAsync(cancellationToken);
         try
         {
             // Try to get the model first
-            var model = await FindModelByIdAsync(modelId, cancellationToken);
+            var model = await FindModelByIdAsync(idOrAlias, cancellationToken);
             if (model == null)
             {
                 // Also try by alias
                 var allModels = await ScanAllModelsAsync(cancellationToken);
                 model = allModels.FirstOrDefault(m =>
                     !string.IsNullOrEmpty(m.Alias) &&
-                    string.Equals(m.Alias, modelId, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(m.Alias, idOrAlias, StringComparison.OrdinalIgnoreCase));
 
                 if (model == null)
                 {
@@ -178,16 +186,16 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Failed to delete model directory for {ModelId}: {DirPath}",
-                        modelId, modelDirPath);
+                        idOrAlias, modelDirPath);
                 }
             }
 
-            _logger.LogInformation("Deleted model {ModelId}", modelId);
+            _logger.LogInformation("Deleted model {ModelId}", idOrAlias);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to delete model {ModelId}", modelId);
+            _logger.LogError(ex, "Failed to delete model {ModelId}", idOrAlias);
             return false;
         }
         finally
@@ -247,14 +255,14 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
     }
 
     /// <summary>
-    /// Finds a model by its ID by scanning the file system
+    /// Finds a model by its ID or alias by scanning the file system
     /// </summary>
-    private async Task<LMModel?> FindModelByIdAsync(string modelId, CancellationToken cancellationToken)
+    private async Task<LMModel?> FindModelByIdAsync(string idOrAlias, CancellationToken cancellationToken)
     {
         try
         {
             // Try to parse as a model identifier and load from file
-            if (ModelIdentifier.TryParse(modelId, out var identifier))
+            if (ModelIdentifier.TryParse(idOrAlias, out var identifier))
             {
                 var metadataFilePath = FileSystemHelper.GetMetadataFilePath(identifier, _baseDirectory);
 
@@ -266,11 +274,11 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
 
             // If direct lookup fails, scan all models (this handles cases where the ID format might be different)
             var allModels = await ScanAllModelsAsync(cancellationToken);
-            return allModels.FirstOrDefault(m => m.Id.Equals(modelId, StringComparison.OrdinalIgnoreCase));
+            return allModels.FirstOrDefault(m => m.Id.Equals(idOrAlias, StringComparison.OrdinalIgnoreCase));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error finding model by ID {ModelId}", modelId);
+            _logger.LogError(ex, "Error finding model by ID or alias {IdOrAlias}", idOrAlias);
             return null;
         }
     }

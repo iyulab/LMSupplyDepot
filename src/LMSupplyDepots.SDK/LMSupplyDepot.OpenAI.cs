@@ -116,28 +116,29 @@ public partial class LMSupplyDepot
                 // Debug: Log the raw response
                 _logger.LogDebug("Raw model response: {Response}", responseText);
 
-                // Try to parse tool call from response
-                if (TryParseToolCall(responseText, out var toolCall))
-                {
-                    // Execute the tool call
-                    try
-                    {
-                        var toolResult = await ToolService.ExecuteToolAsync(
-                            toolCall.Function.Name,
-                            toolCall.Function.Arguments,
-                            cancellationToken);
+                // Try to parse tool calls from response (supports multiple calls)
+                var toolCalls = ParseToolCalls(responseText, request.Tools);
 
-                        // Update the assistant message to include the tool call
-                        assistantMessage.ToolCalls = new List<ToolCall> { toolCall };
+                if (toolCalls.Count > 0)
+                {
+                    // Handle tool choice preference
+                    if (ShouldExecuteToolCalls(request.ToolChoice, toolCalls))
+                    {
+                        // Check if we should execute tools or just return the calls
+                        if (request.ParallelToolCalls != false) // Default is true for parallel execution
+                        {
+                            // Execute tool calls in parallel if enabled
+                            await ExecuteToolCallsInParallelAsync(toolCalls, cancellationToken);
+                        }
+
+                        // Update the assistant message to include the tool calls
+                        assistantMessage.ToolCalls = toolCalls;
                         assistantMessage.Content = null; // Remove content when tool_calls are present
 
                         // Set finish reason to tool_calls
                         response.Choices[0].FinishReason = "tool_calls";
-                    }
-                    catch (Exception ex)
-                    {
-                        // If tool execution fails, keep the original response
-                        _logger.LogError(ex, "Failed to execute tool call: {ToolName}", toolCall.Function.Name);
+
+                        _logger.LogInformation("Parsed {Count} tool calls from model response", toolCalls.Count);
                     }
                 }
             }
@@ -290,9 +291,80 @@ public partial class LMSupplyDepot
     }
 
     /// <summary>
-    /// Apply dynamic tool formatting based on extracted metadata
+    /// Apply dynamic tool formatting based on extracted metadata and chat template
     /// </summary>
-    private Task ApplyDynamicToolFormattingAsync(
+    private async Task ApplyDynamicToolFormattingAsync(
+        OpenAIChatCompletionRequest request,
+        ModelMetadata metadata,
+        CancellationToken cancellationToken)
+    {
+        // If metadata service supports chat template application, use it
+        if (ModelMetadataService != null)
+        {
+            try
+            {
+                await ApplyChatTemplateBasedToolFormattingAsync(request, metadata, cancellationToken);
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to apply chat template based tool formatting, falling back to metadata-based approach");
+            }
+        }
+
+        // Fallback to metadata-based formatting without hardcoded model name patterns
+        await ApplyMetadataBasedToolFormattingAsync(request, metadata, cancellationToken);
+    }
+
+    /// <summary>
+    /// Apply tool formatting using the model's native chat template system
+    /// </summary>
+    private async Task ApplyChatTemplateBasedToolFormattingAsync(
+        OpenAIChatCompletionRequest request,
+        ModelMetadata metadata,
+        CancellationToken cancellationToken)
+    {
+        // Convert OpenAI request to chat template format
+        var chatMessages = request.Messages.Select(m => new SDK.Services.ChatMessage
+        {
+            Role = m.Role.ToLowerInvariant(),
+            Content = GetMessageContentText(m)
+        }).ToList();
+
+        // Prepare tool options for the chat template
+        var toolOptions = new SDK.Services.ToolCallOptions
+        {
+            Tools = request.Tools!.Select(t => new SDK.Services.ToolDefinition
+            {
+                Name = t.Function.Name,
+                Description = t.Function.Description ?? string.Empty,
+                Parameters = t.Function.Parameters ?? new object()
+            })
+        };
+
+        // Apply the model's native chat template with tool support
+        var formattedPrompt = await ModelMetadataService!.ApplyChatTemplateAsync(
+            request.Model,
+            chatMessages,
+            addGenerationPrompt: true,
+            toolOptions,
+            cancellationToken);
+
+        // Replace the entire message array with a single formatted prompt
+        request.Messages.Clear();
+        request.Messages.Add(new OpenAIChatMessage
+        {
+            Role = "user",
+            Content = new TextContentPart { Text = formattedPrompt }
+        });
+
+        _logger.LogDebug("Applied chat template based tool formatting for model: {Model}", request.Model);
+    }
+
+    /// <summary>
+    /// Apply tool formatting based on metadata without hardcoded model patterns
+    /// </summary>
+    private Task ApplyMetadataBasedToolFormattingAsync(
         OpenAIChatCompletionRequest request,
         ModelMetadata metadata,
         CancellationToken cancellationToken)
@@ -306,16 +378,11 @@ public partial class LMSupplyDepot
 
         var toolsJsonString = System.Text.Json.JsonSerializer.Serialize(toolsJson);
 
-        // Use the model's specific tool format
+        // Use the model's metadata-derived tool format instead of hardcoded patterns
         var toolFormat = metadata.ToolCapabilities.ToolCallFormat.ToLowerInvariant();
 
-        string toolInstruction = toolFormat switch
-        {
-            "phi4" or "phi3.5" or "phi3" => FormatToolsForPhi(toolsJsonString),
-            "llama-native" or "llama" => FormatToolsForLlama(toolsJsonString),
-            "mixtral" => FormatToolsForMixtral(toolsJsonString),
-            _ => FormatToolsGeneric(toolsJsonString)
-        };
+        // Apply format based on extracted capabilities rather than name matching
+        string toolInstruction = DetermineToolInstructionFromMetadata(toolsJsonString, metadata);
 
         // Add to system message
         var systemMessage = request.Messages.FirstOrDefault(m => m.Role.ToLowerInvariant() == "system");
@@ -335,55 +402,116 @@ public partial class LMSupplyDepot
             });
         }
 
-        _logger.LogDebug("Applied dynamic tool formatting for format: {Format}", toolFormat);
+        _logger.LogDebug("Applied metadata-based tool formatting for format: {Format}", toolFormat);
         return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Apply architecture-based tool formatting when metadata is not available
+    /// Determine tool instruction format from metadata capabilities
     /// </summary>
-    private Task ApplyArchitectureBasedToolFormattingAsync(
+    private string DetermineToolInstructionFromMetadata(string toolsJsonString, ModelMetadata metadata)
+    {
+        var format = metadata.ToolCapabilities.ToolCallFormat.ToLowerInvariant();
+        var architecture = metadata.Architecture.ToLowerInvariant();
+
+        // Use metadata-derived format with fallback chain
+        return format switch
+        {
+            "phi4" or "phi3.5" or "phi3" => FormatToolsForPhi(toolsJsonString),
+            "llama-native" or "llama" => FormatToolsForLlama(toolsJsonString),
+            "mixtral" => FormatToolsForMixtral(toolsJsonString),
+            "qwen" => FormatToolsForQwen(toolsJsonString),
+            "gemma" => FormatToolsForGemma(toolsJsonString),
+            _ => FormatToolsFromArchitecture(toolsJsonString, architecture, metadata)
+        };
+    }
+
+    /// <summary>
+    /// Format tools based on architecture when specific format is unknown
+    /// </summary>
+    private string FormatToolsFromArchitecture(string toolsJsonString, string architecture, ModelMetadata metadata)
+    {
+        // Extract tool tokens from metadata if available
+        var toolTokens = metadata.ToolCapabilities.ToolTokens;
+
+        return architecture switch
+        {
+            "phi3" or "phi" => FormatToolsForPhi(toolsJsonString),
+            "llama" => FormatToolsForLlama(toolsJsonString),
+            "mixtral" => FormatToolsForMixtral(toolsJsonString),
+            "qwen" => FormatToolsForQwen(toolsJsonString),
+            "gemma" => FormatToolsForGemma(toolsJsonString),
+            _ => FormatToolsWithTokens(toolsJsonString, toolTokens)
+        };
+    }
+
+    /// <summary>
+    /// Format tools using extracted tool tokens from metadata
+    /// </summary>
+    private string FormatToolsWithTokens(string toolsJsonString, Dictionary<string, string> toolTokens)
+    {
+        if (toolTokens.Any())
+        {
+            // Use actual tokens from model metadata if available
+            var startToken = toolTokens.GetValueOrDefault("start", "<tool>");
+            var endToken = toolTokens.GetValueOrDefault("end", "</tool>");
+
+            return $"Available tools: {toolsJsonString}\n\n" +
+                   $"Use tools by responding with:\n{startToken}\n{{\"name\": \"function_name\", \"arguments\": {{...}}}}\n{endToken}";
+        }
+
+        // Generic fallback
+        return FormatToolsGeneric(toolsJsonString);
+    }
+
+    /// <summary>
+    /// Apply architecture-based tool formatting when metadata is not available
+    /// This method attempts to infer capabilities from model name patterns as a fallback
+    /// </summary>
+    private async Task ApplyArchitectureBasedToolFormattingAsync(
         OpenAIChatCompletionRequest request,
         string modelId,
         CancellationToken cancellationToken)
     {
-        // Try to infer architecture from model name as fallback
-        var modelName = modelId.ToLowerInvariant();
-        string toolFormat;
+        // This is a compatibility fallback for when metadata extraction fails
+        // Ideally, this should be avoided by ensuring metadata service works properly
+        _logger.LogWarning("Falling back to architecture-based tool formatting for model: {ModelId}", modelId);
 
-        // Use more flexible architecture detection
-        if (modelName.Contains("phi-4") || modelName.Contains("phi4"))
+        // Try to get some metadata through alternative means
+        ModelMetadata? inferredMetadata = null;
+        if (ModelMetadataService != null)
         {
-            toolFormat = "phi4";
+            try
+            {
+                inferredMetadata = await ModelMetadataService.GetModelMetadataAsync(modelId, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not get metadata for model: {ModelId}", modelId);
+            }
         }
-        else if (modelName.Contains("phi-3.5") || modelName.Contains("phi3.5"))
+
+        if (inferredMetadata != null)
         {
-            toolFormat = "phi3.5";
+            // Use the metadata-based approach if we managed to get metadata
+            await ApplyMetadataBasedToolFormattingAsync(request, inferredMetadata, cancellationToken);
+            return;
         }
-        else if (modelName.Contains("phi"))
-        {
-            toolFormat = "phi3";
-        }
-        else if (modelName.Contains("llama"))
-        {
-            toolFormat = "llama-native";
-        }
-        else if (modelName.Contains("mixtral"))
-        {
-            toolFormat = "mixtral";
-        }
-        else if (modelName.Contains("qwen"))
-        {
-            toolFormat = "qwen";
-        }
-        else if (modelName.Contains("gemma"))
-        {
-            toolFormat = "gemma";
-        }
-        else
-        {
-            toolFormat = "generic";
-        }
+
+        // Last resort: use model name pattern inference
+        await ApplyLegacyPatternBasedFormattingAsync(request, modelId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Legacy pattern-based formatting for maximum compatibility
+    /// </summary>
+    private Task ApplyLegacyPatternBasedFormattingAsync(
+        OpenAIChatCompletionRequest request,
+        string modelId,
+        CancellationToken cancellationToken)
+    {
+        // Infer architecture from model name as absolute fallback
+        var modelName = modelId.ToLowerInvariant();
 
         var toolsJson = request.Tools!.Select(t => new
         {
@@ -394,11 +522,15 @@ public partial class LMSupplyDepot
 
         var toolsJsonString = System.Text.Json.JsonSerializer.Serialize(toolsJson);
 
-        string toolInstruction = toolFormat switch
+        // Create a minimal metadata-like object for consistency
+        var legacyFormat = InferToolFormatFromModelName(modelName);
+        string toolInstruction = legacyFormat switch
         {
             "phi4" or "phi3.5" or "phi3" => FormatToolsForPhi(toolsJsonString),
             "llama-native" => FormatToolsForLlama(toolsJsonString),
             "mixtral" => FormatToolsForMixtral(toolsJsonString),
+            "qwen" => FormatToolsForQwen(toolsJsonString),
+            "gemma" => FormatToolsForGemma(toolsJsonString),
             _ => FormatToolsGeneric(toolsJsonString)
         };
 
@@ -420,8 +552,27 @@ public partial class LMSupplyDepot
             });
         }
 
-        _logger.LogDebug("Applied architecture-based tool formatting for inferred format: {Format}", toolFormat);
+        _logger.LogDebug("Applied legacy pattern-based tool formatting for inferred format: {Format}", legacyFormat);
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Infer tool format from model name patterns (legacy compatibility)
+    /// </summary>
+    private static string InferToolFormatFromModelName(string modelName)
+    {
+        // More flexible architecture detection based on common naming patterns
+        return modelName switch
+        {
+            var name when name.Contains("phi-4") || name.Contains("phi4") => "phi4",
+            var name when name.Contains("phi-3.5") || name.Contains("phi3.5") => "phi3.5",
+            var name when name.Contains("phi") => "phi3",
+            var name when name.Contains("llama") => "llama-native",
+            var name when name.Contains("mixtral") => "mixtral",
+            var name when name.Contains("qwen") => "qwen",
+            var name when name.Contains("gemma") => "gemma",
+            _ => "generic"
+        };
     }
 
     /// <summary>
@@ -468,7 +619,14 @@ public partial class LMSupplyDepot
     /// </summary>
     private string FormatToolsForPhi(string toolsJsonString)
     {
-        return $"<|tool|>{toolsJsonString}<|/tool|>";
+        return $"You have access to the following tools: {toolsJsonString}\n\n" +
+               "When you need to use a tool, respond with the tool call in this exact format:\n" +
+               "<|tool|>{{\"name\": \"function_name\", \"parameters\": {{\"param1\": \"value1\", \"param2\": \"value2\"}}}}<|/tool|>\n\n" +
+               "Important:\n" +
+               "- Use the exact function names from the tools list\n" +
+               "- Parameters should match the required schema\n" +
+               "- Only call tools when specifically requested or when they help answer the user's question\n" +
+               "- Do not include any other text or explanation within the tool tags";
     }
 
     /// <summary>
@@ -536,7 +694,283 @@ public partial class LMSupplyDepot
     #region Private Tool Parsing Methods
 
     /// <summary>
-    /// Try to parse a tool call from the model's response text
+    /// Parse multiple tool calls from the model's response text
+    /// </summary>
+    private List<ToolCall> ParseToolCalls(string responseText, List<Tool> availableTools)
+    {
+        var toolCalls = new List<ToolCall>();
+        var availableToolNames = availableTools.Select(t => t.Function.Name.ToLowerInvariant()).ToHashSet();
+
+        try
+        {
+            // Try to parse Phi-4-mini specific tool call format with <|tool_call|> tokens
+            var toolCallStartPattern = @"<\|tool_call\|>(.*?)<\|/tool_call\|>";
+            var toolCallMatches = System.Text.RegularExpressions.Regex.Matches(responseText, toolCallStartPattern, System.Text.RegularExpressions.RegexOptions.Singleline);
+
+            foreach (System.Text.RegularExpressions.Match match in toolCallMatches)
+            {
+                var toolCallContent = match.Groups[1].Value.Trim();
+                _logger.LogDebug("Found tool call content: {Content}", toolCallContent);
+
+                if (TryParseToolCallFromJson(toolCallContent, availableToolNames, out var toolCall))
+                {
+                    toolCalls.Add(toolCall);
+                }
+            }
+
+            // If no structured tool calls found, try other patterns
+            if (toolCalls.Count == 0)
+            {
+                // Look for TOOL_CALL: function_name(arguments) pattern
+                if (TryParseSimpleToolCall(responseText, availableToolNames, out var simpleToolCall))
+                {
+                    toolCalls.Add(simpleToolCall);
+                }
+            }
+
+            // Look for JSON patterns that might indicate tool calls
+            if (toolCalls.Count == 0 && (responseText.Contains("tool_call") || responseText.Contains("function_call")))
+            {
+                if (TryParseJsonToolCall(responseText, availableToolNames, out var jsonToolCall))
+                {
+                    toolCalls.Add(jsonToolCall);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to parse tool calls from response: {Response}", responseText);
+        }
+
+        return toolCalls;
+    }
+
+    /// <summary>
+    /// Try to parse a tool call from JSON content
+    /// </summary>
+    private bool TryParseToolCallFromJson(string toolCallContent, HashSet<string> availableToolNames, out ToolCall toolCall)
+    {
+        toolCall = null!;
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(toolCallContent);
+            var root = doc.RootElement;
+
+            var name = root.GetProperty("name").GetString();
+            var arguments = root.TryGetProperty("arguments", out var argsElement) ? argsElement.GetRawText() : "{}";
+
+            if (!string.IsNullOrEmpty(name) && availableToolNames.Contains(name.ToLowerInvariant()))
+            {
+                toolCall = CreateToolCall(name, arguments);
+                return true;
+            }
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            _logger.LogDebug(ex, "Failed to parse tool call as JSON: {Content}", toolCallContent);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Try to parse simple TOOL_CALL: function_name(arguments) format
+    /// </summary>
+    private bool TryParseSimpleToolCall(string responseText, HashSet<string> availableToolNames, out ToolCall toolCall)
+    {
+        toolCall = null!;
+
+        if (responseText.Contains("TOOL_CALL:"))
+        {
+            var toolCallStart = responseText.IndexOf("TOOL_CALL:");
+            if (toolCallStart >= 0)
+            {
+                var callLine = responseText.Substring(toolCallStart + "TOOL_CALL:".Length).Trim();
+                var parenIndex = callLine.IndexOf('(');
+
+                if (parenIndex > 0)
+                {
+                    var functionName = callLine.Substring(0, parenIndex).Trim();
+
+                    if (availableToolNames.Contains(functionName.ToLowerInvariant()))
+                    {
+                        var argsStart = parenIndex + 1;
+                        var parenEnd = callLine.LastIndexOf(')');
+                        var jsonArgs = "{}";
+
+                        if (parenEnd > argsStart)
+                        {
+                            var argsString = callLine.Substring(argsStart, parenEnd - argsStart).Trim();
+                            if (!string.IsNullOrEmpty(argsString))
+                            {
+                                jsonArgs = ConvertSimpleArgsToJson(argsString, functionName);
+                            }
+                        }
+
+                        toolCall = CreateToolCall(functionName, jsonArgs);
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Try to parse JSON-formatted tool call from response
+    /// </summary>
+    private bool TryParseJsonToolCall(string responseText, HashSet<string> availableToolNames, out ToolCall toolCall)
+    {
+        toolCall = null!;
+
+        var jsonStart = responseText.IndexOf('{');
+        var jsonEnd = responseText.LastIndexOf('}');
+
+        if (jsonStart >= 0 && jsonEnd > jsonStart)
+        {
+            try
+            {
+                var jsonStr = responseText.Substring(jsonStart, jsonEnd - jsonStart + 1);
+                var toolCallData = System.Text.Json.JsonSerializer.Deserialize<dynamic>(jsonStr);
+
+                if (toolCallData != null)
+                {
+                    var toolCallElement = ((System.Text.Json.JsonElement)toolCallData).GetProperty("tool_call");
+                    var name = toolCallElement.GetProperty("name").GetString();
+                    var arguments = toolCallElement.GetProperty("arguments");
+
+                    if (!string.IsNullOrEmpty(name) && availableToolNames.Contains(name.ToLowerInvariant()))
+                    {
+                        toolCall = CreateToolCall(name, arguments.GetRawText());
+                        return true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to parse JSON tool call: {Json}", responseText.Substring(jsonStart, jsonEnd - jsonStart + 1));
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Create a properly formatted tool call with OpenAI-compatible ID
+    /// </summary>
+    private ToolCall CreateToolCall(string functionName, string arguments)
+    {
+        return new ToolCall
+        {
+            Id = $"call_{Guid.NewGuid():N}",
+            Type = "function",
+            Function = new FunctionCall
+            {
+                Name = functionName,
+                Arguments = arguments
+            }
+        };
+    }
+
+    /// <summary>
+    /// Convert simple argument format to JSON
+    /// </summary>
+    private string ConvertSimpleArgsToJson(string argsString, string functionName)
+    {
+        // Simple parsing for key="value" format
+        if (argsString.Contains("location=") && functionName == "get_weather")
+        {
+            var locationMatch = System.Text.RegularExpressions.Regex.Match(argsString, @"location\s*=\s*""([^""]+)""");
+            if (locationMatch.Success)
+            {
+                return $"{{\"location\": \"{locationMatch.Groups[1].Value}\"}}";
+            }
+        }
+        else if (functionName == "get_time")
+        {
+            return "{}";
+        }
+
+        // Try to parse as JSON if it looks like JSON
+        if (argsString.Trim().StartsWith('{') && argsString.Trim().EndsWith('}'))
+        {
+            return argsString.Trim();
+        }
+
+        return "{}";
+    }
+
+    /// <summary>
+    /// Determine if tool calls should be executed based on tool_choice setting
+    /// </summary>
+    private bool ShouldExecuteToolCalls(ToolChoice? toolChoice, List<ToolCall> toolCalls)
+    {
+        if (toolChoice == null)
+            return true; // Default behavior
+
+        if (toolChoice.Type == "none")
+            return false;
+
+        if (toolChoice.Type == "auto")
+            return true;
+
+        if (toolChoice.Type == "required")
+            return true;
+
+        // For specific function choice, check if any tool call matches
+        if (toolChoice.Function != null)
+        {
+            return toolCalls.Any(tc => tc.Function.Name.Equals(toolChoice.Function.Name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Execute multiple tool calls in parallel
+    /// </summary>
+    private async Task ExecuteToolCallsInParallelAsync(List<ToolCall> toolCalls, CancellationToken cancellationToken)
+    {
+        if (toolCalls.Count <= 1)
+        {
+            // Single tool call - execute directly
+            if (toolCalls.Count == 1)
+            {
+                await ExecuteSingleToolCallAsync(toolCalls[0], cancellationToken);
+            }
+            return;
+        }
+
+        // Execute multiple tool calls in parallel
+        var tasks = toolCalls.Select(tc => ExecuteSingleToolCallAsync(tc, cancellationToken));
+        await Task.WhenAll(tasks);
+    }
+
+    /// <summary>
+    /// Execute a single tool call
+    /// </summary>
+    private async Task ExecuteSingleToolCallAsync(ToolCall toolCall, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var toolResult = await ToolService.ExecuteToolAsync(
+                toolCall.Function.Name,
+                toolCall.Function.Arguments,
+                cancellationToken);
+
+            _logger.LogDebug("Tool call {Id} executed successfully: {Name}", toolCall.Id, toolCall.Function.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to execute tool call {Id}: {Name}", toolCall.Id, toolCall.Function.Name);
+            // Continue execution of other tools even if one fails
+        }
+    }
+
+    /// <summary>
+    /// Try to parse a tool call from the model's response text (legacy method for backward compatibility)
     /// </summary>
     private bool TryParseToolCall(string responseText, out ToolCall toolCall)
     {
@@ -564,16 +998,7 @@ public partial class LMSupplyDepot
 
                     if (!string.IsNullOrEmpty(name))
                     {
-                        toolCall = new ToolCall
-                        {
-                            Id = $"call_{Guid.NewGuid():N}",
-                            Type = "function",
-                            Function = new FunctionCall
-                            {
-                                Name = name,
-                                Arguments = arguments
-                            }
-                        };
+                        toolCall = CreateToolCall(name, arguments);
                         return true;
                     }
                 }
@@ -605,34 +1030,9 @@ public partial class LMSupplyDepot
                             var argsString = callLine.Substring(argsStart, parenEnd - argsStart).Trim();
 
                             // Create a simple JSON object from the arguments
-                            var jsonArgs = "{}";
-                            if (!string.IsNullOrEmpty(argsString))
-                            {
-                                // Simple parsing for key="value" format
-                                if (argsString.Contains("location=") && functionName == "get_weather")
-                                {
-                                    var locationMatch = System.Text.RegularExpressions.Regex.Match(argsString, @"location\s*=\s*""([^""]+)""");
-                                    if (locationMatch.Success)
-                                    {
-                                        jsonArgs = $"{{\"location\": \"{locationMatch.Groups[1].Value}\"}}";
-                                    }
-                                }
-                                else if (functionName == "get_time")
-                                {
-                                    jsonArgs = "{}";
-                                }
-                            }
+                            var jsonArgs = ConvertSimpleArgsToJson(argsString, functionName);
 
-                            toolCall = new ToolCall
-                            {
-                                Id = $"call_{Guid.NewGuid():N}",
-                                Type = "function",
-                                Function = new FunctionCall
-                                {
-                                    Name = functionName,
-                                    Arguments = jsonArgs
-                                }
-                            };
+                            toolCall = CreateToolCall(functionName, jsonArgs);
                             return true;
                         }
                     }
@@ -662,16 +1062,7 @@ public partial class LMSupplyDepot
 
                         if (!string.IsNullOrEmpty(name))
                         {
-                            toolCall = new ToolCall
-                            {
-                                Id = $"call_{Guid.NewGuid():N}",
-                                Type = "function",
-                                Function = new FunctionCall
-                                {
-                                    Name = name,
-                                    Arguments = arguments.GetRawText()
-                                }
-                            };
+                            toolCall = CreateToolCall(name, arguments.GetRawText());
                             return true;
                         }
                     }
@@ -684,6 +1075,44 @@ public partial class LMSupplyDepot
         }
 
         return false;
+    }
+
+    #endregion
+
+    #region Private Helper Methods
+
+    /// <summary>
+    /// Extract text content from an OpenAI message
+    /// </summary>
+    private static string GetMessageContentText(OpenAIChatMessage message)
+    {
+        if (message.Content is TextContentPart textPart)
+        {
+            return textPart.Text ?? string.Empty;
+        }
+
+        // For other content types, try to extract string representation
+        return message.Content?.ToString() ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Format tools for Qwen models
+    /// </summary>
+    private string FormatToolsForQwen(string toolsJsonString)
+    {
+        return $"# Available Tools\n\n{toolsJsonString}\n\n" +
+               "To use a tool, respond with the following format:\n" +
+               "```json\n{{\"tool_call\": {{\"name\": \"function_name\", \"arguments\": {{...}}}}}}\n```";
+    }
+
+    /// <summary>
+    /// Format tools for Gemma models
+    /// </summary>
+    private string FormatToolsForGemma(string toolsJsonString)
+    {
+        return $"Available tools: {toolsJsonString}\n\n" +
+               "Use tools by responding with:\n" +
+               "<tool_call>{{\"name\": \"function_name\", \"arguments\": {{...}}}}</tool_call>";
     }
 
     #endregion

@@ -132,7 +132,38 @@ public class ToolChoiceConverter : JsonConverter<ToolChoice?>
 
         if (reader.TokenType == JsonTokenType.StartObject)
         {
-            return JsonSerializer.Deserialize<ToolChoice>(ref reader, options);
+            // Manually deserialize to avoid infinite recursion
+            var toolChoice = new ToolChoice();
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndObject)
+                    break;
+
+                if (reader.TokenType == JsonTokenType.PropertyName)
+                {
+                    var propertyName = reader.GetString();
+                    reader.Read(); // Move to the value
+
+                    switch (propertyName?.ToLowerInvariant())
+                    {
+                        case "type":
+                            toolChoice.Type = reader.GetString();
+                            break;
+                        case "function":
+                            if (reader.TokenType == JsonTokenType.StartObject)
+                            {
+                                toolChoice.Function = JsonSerializer.Deserialize<FunctionChoice>(ref reader, options);
+                            }
+                            break;
+                        default:
+                            reader.Skip(); // Skip unknown properties
+                            break;
+                    }
+                }
+            }
+
+            return toolChoice;
         }
 
         throw new JsonException($"Unable to convert JSON token type {reader.TokenType} to ToolChoice");
@@ -153,8 +184,22 @@ public class ToolChoiceConverter : JsonConverter<ToolChoice?>
         }
         else
         {
-            // Otherwise, write as object
-            JsonSerializer.Serialize(writer, value, typeof(ToolChoice), options);
+            // Manually write object to avoid infinite recursion
+            writer.WriteStartObject();
+
+            if (!string.IsNullOrEmpty(value.Type))
+            {
+                writer.WritePropertyName("type");
+                writer.WriteStringValue(value.Type);
+            }
+
+            if (value.Function != null)
+            {
+                writer.WritePropertyName("function");
+                JsonSerializer.Serialize(writer, value.Function, options);
+            }
+
+            writer.WriteEndObject();
         }
     }
 }

@@ -26,7 +26,7 @@ public partial class LMSupplyDepot
     }
 
     /// <summary>
-    /// Gets a model by its ID or alias
+    /// Gets a model by its ID or alias and updates its actual loading status
     /// </summary>
     public async Task<LMModel?> GetModelAsync(
         string modelKey,
@@ -35,20 +35,36 @@ public partial class LMSupplyDepot
         var model = await ModelManager.GetModelAsync(modelKey, cancellationToken);
         if (model != null)
         {
+            // Update the actual loading status using the actual model ID (not the input key)
+            model.IsLoaded = await ModelLoader.IsModelLoadedAsync(model.Id, cancellationToken);
             return model;
         }
 
-        return await ModelManager.GetModelByAliasAsync(modelKey, cancellationToken);
+        var aliasModel = await ModelManager.GetModelByAliasAsync(modelKey, cancellationToken);
+        if (aliasModel != null)
+        {
+            // Update the actual loading status using the actual model ID (not the alias)
+            aliasModel.IsLoaded = await ModelLoader.IsModelLoadedAsync(aliasModel.Id, cancellationToken);
+            return aliasModel;
+        }
+
+        return null;
     }
 
     /// <summary>
-    /// Gets a model by its alias
+    /// Gets a model by its alias and updates its actual loading status
     /// </summary>
     public async Task<LMModel?> GetModelByAliasAsync(
         string alias,
         CancellationToken cancellationToken = default)
     {
-        return await ModelManager.GetModelByAliasAsync(alias, cancellationToken);
+        var model = await ModelManager.GetModelByAliasAsync(alias, cancellationToken);
+        if (model != null)
+        {
+            // Update the actual loading status from the model loader
+            model.IsLoaded = await ModelLoader.IsModelLoadedAsync(model.Id, cancellationToken);
+        }
+        return model;
     }
 
     /// <summary>

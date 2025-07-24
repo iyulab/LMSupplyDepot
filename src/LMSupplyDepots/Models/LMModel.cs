@@ -88,8 +88,9 @@ public class LMModel
 
     /// <summary>
     /// Indicates whether the model is currently loaded in memory
+    /// This property should not be persisted to storage as it represents runtime state
     /// </summary>
-    [JsonPropertyName("isLoaded")]
+    [JsonIgnore]
     public bool IsLoaded { get; set; } = false;
 
     /// <summary>

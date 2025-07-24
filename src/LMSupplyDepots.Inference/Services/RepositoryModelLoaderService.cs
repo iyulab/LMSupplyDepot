@@ -39,18 +39,18 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
     {
         try
         {
-            // Check if already loaded
-            if (_loadedModels.TryGetValue(modelId, out var existingModel))
-            {
-                _logger.LogInformation("Model {ModelId} is already loaded", modelId);
-                return existingModel;
-            }
-
-            // Get model from repository
+            // Get model from repository first to resolve alias to actual ID
             var model = await _repository.GetModelAsync(modelId, cancellationToken);
             if (model == null)
             {
                 throw new ModelLoadException(modelId, "Model not found in repository");
+            }
+
+            // Check if already loaded using the actual model ID
+            if (_loadedModels.TryGetValue(model.Id, out var existingModel))
+            {
+                _logger.LogInformation("Model {ModelId} is already loaded", model.Id);
+                return existingModel;
             }
 
             // Validate model can be loaded
@@ -58,44 +58,44 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
 
             // Find a suitable adapter for the model
             _logger.LogInformation("Finding adapter for model {ModelId} with format '{Format}' and type '{Type}'",
-                modelId, model.Format, model.Type);
+                model.Id, model.Format, model.Type);
 
             var adapter = FindAdapter(model);
             if (adapter == null)
             {
                 _logger.LogError("No adapter found for model {ModelId} with format '{Format}' and type '{Type}'. Available adapters: {AdapterNames}",
-                    modelId, model.Format, model.Type,
+                    model.Id, model.Format, model.Type,
                     string.Join(", ", _adapters.Select(a => $"{a.AdapterName}({string.Join(",", a.SupportedFormats)})")));
 
-                throw new ModelLoadException(modelId,
+                throw new ModelLoadException(model.Id,
                     $"No adapter found for model with format '{model.Format}' and type '{model.Type}'");
             }
 
             // Load the model using the adapter
             _logger.LogInformation("Loading model {ModelId} using adapter {AdapterName}",
-                modelId, adapter.AdapterName);
+                model.Id, adapter.AdapterName);
 
             var success = await adapter.LoadModelAsync(model, parameters, cancellationToken);
 
             _logger.LogInformation("Adapter {AdapterName} returned {Success} for model {ModelId}",
-                adapter.AdapterName, success, modelId);
+                adapter.AdapterName, success, model.Id);
 
             if (!success)
             {
-                throw new ModelLoadException(modelId, "Failed to load model using adapter");
+                throw new ModelLoadException(model.Id, "Failed to load model using adapter");
             }
 
             // Mark as loaded and update timestamps
             model.SetLoaded();
 
-            // Add to loaded models cache
-            _loadedModels[modelId] = model;
+            // Always use the actual model ID as the cache key for consistency
+            _loadedModels[model.Id] = model;
 
             // Update repository with new load state
             await _repository.SaveModelAsync(model, cancellationToken);
 
             _logger.LogInformation("Model {ModelId} loaded successfully at {LoadedAt}",
-                modelId, model.LoadedAt);
+                model.Id, model.LoadedAt);
 
             return model;
         }
@@ -108,6 +108,7 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
 
     /// <summary>
     /// Unloads a model from memory and updates its load state
+    /// Always resolves to actual model ID for consistent cache management
     /// </summary>
     public async Task UnloadModelAsync(
         string modelId,
@@ -115,31 +116,39 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
     {
         try
         {
-            // Remove from loaded models cache
-            if (_loadedModels.TryRemove(modelId, out var model))
+            // Get the model to resolve alias to actual ID
+            var model = await _repository.GetModelAsync(modelId, cancellationToken);
+            if (model == null)
+            {
+                _logger.LogWarning("Model {ModelId} not found for unloading", modelId);
+                return;
+            }
+
+            // Always use the actual model ID for cache operations
+            if (_loadedModels.TryRemove(model.Id, out var cachedModel))
             {
                 // Find the adapter for this model
-                var adapter = FindAdapter(model);
+                var adapter = FindAdapter(cachedModel);
                 if (adapter != null)
                 {
-                    // Unload from the adapter first
+                    // Unload from the adapter using actual model ID
                     _logger.LogInformation("Unloading model {ModelId} using adapter {AdapterName}",
-                        modelId, adapter.AdapterName);
+                        model.Id, adapter.AdapterName);
 
-                    var success = await adapter.UnloadModelAsync(modelId, cancellationToken);
+                    var success = await adapter.UnloadModelAsync(model.Id, cancellationToken);
                     if (!success)
                     {
-                        _logger.LogWarning("Adapter failed to unload model {ModelId}", modelId);
+                        _logger.LogWarning("Adapter failed to unload model {ModelId}", model.Id);
                     }
                 }
 
                 // Mark as unloaded
-                model.SetUnloaded();
+                cachedModel.SetUnloaded();
 
                 // Update repository with new load state
-                await _repository.SaveModelAsync(model, cancellationToken);
+                await _repository.SaveModelAsync(cachedModel, cancellationToken);
 
-                _logger.LogInformation("Model {ModelId} unloaded successfully", modelId);
+                _logger.LogInformation("Model {ModelId} unloaded successfully", model.Id);
             }
             else
             {
@@ -172,20 +181,21 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
 
     /// <summary>
     /// Checks if a model is currently loaded
+    /// Always resolves to actual model ID for consistent cache lookup
     /// </summary>
     public async Task<bool> IsModelLoadedAsync(
         string modelId,
         CancellationToken cancellationToken = default)
     {
-        // First check our in-memory cache
-        if (_loadedModels.ContainsKey(modelId))
+        // Get the model from repository to resolve alias to actual ID
+        var model = await _repository.GetModelAsync(modelId, cancellationToken);
+        if (model == null)
         {
-            return true;
+            return false;
         }
 
-        // Fallback to repository check
-        var model = await _repository.GetModelAsync(modelId, cancellationToken);
-        return model?.IsLoaded ?? false;
+        // Always check cache using the actual model ID
+        return _loadedModels.ContainsKey(model.Id);
     }
 
     /// <summary>
@@ -196,44 +206,13 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
     {
         var loadedModels = new List<LMModel>();
 
-        // Get fresh data from repository for all cached models to ensure alias information is up-to-date
         foreach (var cachedModel in _loadedModels.Values)
         {
-            var freshModel = await _repository.GetModelAsync(cachedModel.Id, cancellationToken);
-            if (freshModel != null && freshModel.IsLoaded)
-            {
-                // Update cache with fresh model data (including updated alias)
-                _loadedModels[cachedModel.Id] = freshModel;
-                loadedModels.Add(freshModel);
-            }
-            else if (freshModel != null)
-            {
-                // Model exists but is marked as unloaded, remove from cache
-                _loadedModels.TryRemove(cachedModel.Id, out _);
-            }
+            loadedModels.Add(cachedModel);
         }
 
-        // Also check repository for any models marked as loaded that might not be in our cache
-        // This can happen if the service was restarted
-        var allModels = await _repository.ListModelsAsync(
-            null, null, 0, int.MaxValue, cancellationToken);
-
-        foreach (var model in allModels)
-        {
-            if (model.IsLoaded && !_loadedModels.ContainsKey(model.Id))
-            {
-                // Model is marked as loaded in repository but not in our cache
-                // This might indicate the service was restarted, so we should verify
-                _logger.LogWarning("Model {ModelId} is marked as loaded in repository but not in memory cache. " +
-                    "This might indicate a service restart. Marking as unloaded.", model.Id);
-
-                // Mark as unloaded since we don't have it in memory
-                model.SetUnloaded();
-                await _repository.SaveModelAsync(model, cancellationToken);
-            }
-        }
-
-        return loadedModels.AsReadOnly();
+        _logger.LogInformation("Retrieved {Count} loaded models from cache", loadedModels.Count);
+        return await Task.FromResult(loadedModels.AsReadOnly());
     }
 
     /// <summary>

@@ -110,3 +110,26 @@ public interface IModelManager
 
     #endregion
 }
+
+public static class ModelManagerExtensions
+{
+    public static async Task<string> ResolveModelKeyAsync(
+            this IModelManager modelManager,
+            string modelKey,
+            CancellationToken cancellationToken = default)
+    {
+        var model = await modelManager.GetModelAsync(modelKey, cancellationToken);
+        if (model != null)
+        {
+            return model.Id;
+        }
+
+        model = await modelManager.GetModelByAliasAsync(modelKey, cancellationToken);
+        if (model != null)
+        {
+            return model.Id;
+        }
+
+        return modelKey;
+    }
+}

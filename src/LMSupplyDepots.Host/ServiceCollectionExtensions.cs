@@ -1,4 +1,5 @@
 using LMSupplyDepots.Host;
+using LMSupplyDepots.Host.Services;
 using LMSupplyDepots.SDK;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -30,8 +31,9 @@ public static class ServiceCollectionExtensions
         // Register SDK services using the SDK extension method
         services.AddLMSupplyDepotSDK(options);
 
-        // Register host service (no longer using LMSupplyDepot wrapper)
+        // Register host services
         services.TryAddSingleton<IHostService, HostService>();
+        services.TryAddSingleton<IToolExecutionService, ToolExecutionService>();
 
         return services;
     }

@@ -25,6 +25,7 @@ public class ModelsController : ControllerBase
     public async Task<ActionResult<LMModel[]>> ListModels(
         [FromQuery] string? type = null,
         [FromQuery] string? search = null,
+        [FromQuery] bool loadedOnly = false,
         CancellationToken cancellationToken = default)
     {
         try
@@ -35,12 +36,59 @@ public class ModelsController : ControllerBase
                 modelType = parsedType;
             }
 
-            var models = await _hostService.ListModelsAsync(modelType, search, cancellationToken);
+            IReadOnlyList<LMModel> models;
+            
+            if (loadedOnly)
+            {
+                // Only return loaded models - this is much faster
+                models = await _hostService.GetLoadedModelsAsync(cancellationToken);
+                
+                // Apply filters if needed
+                if (modelType.HasValue)
+                {
+                    models = models.Where(m => m.Type == modelType.Value).ToList();
+                }
+                
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var term = search.ToLowerInvariant();
+                    models = models.Where(m =>
+                        m.Id.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                        m.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                        m.Description.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                        m.RepoId.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                        m.ArtifactName.Contains(term, StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+            }
+            else
+            {
+                // Return all models (uses caching now)
+                models = await _hostService.ListModelsAsync(modelType, search, cancellationToken);
+            }
+
             return Ok(models);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error listing models");
+            return StatusCode(500, new ErrorResponse { Error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Lists only loaded models for performance
+    /// </summary>
+    [HttpGet("models/all-loaded")]
+    public async Task<ActionResult<LMModel[]>> ListLoadedModels(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var models = await _hostService.GetLoadedModelsAsync(cancellationToken);
+            return Ok(models);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing loaded models");
             return StatusCode(500, new ErrorResponse { Error = ex.Message });
         }
     }
@@ -129,9 +177,9 @@ public class ModelsController : ControllerBase
     }
 
     /// <summary>
-    /// Checks if a model is loaded
+    /// Checks if a model is loaded (single model check)
     /// </summary>
-    [HttpGet("models/loaded")]
+    [HttpGet("models/is-loaded")]
     public async Task<ActionResult<bool>> IsModelLoaded(
         [FromQuery] string model,
         CancellationToken cancellationToken = default)

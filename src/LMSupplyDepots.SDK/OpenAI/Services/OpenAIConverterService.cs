@@ -255,9 +255,21 @@ public class OpenAIConverterService : IOpenAIConverterService
             "length" => "length",
             "stop" => "stop",
             "eos" => "stop",
+            "end_of_sequence" => "stop",
+            "end_of_text" => "stop",
             "tool_calls" => "tool_calls",
+            "function_call" => "function_call", // Deprecated but still supported
+            "content_filter" => "content_filter",
+            "filtered" => "content_filter",
+            "safety" => "content_filter",
+            "max_tokens" => "length",
+            "max_length" => "length",
+            "token_limit" => "length",
+            "cancelled" => "stop",
+            "canceled" => "stop",
             "" => "stop",
-            _ => "stop"
+            null => "stop",
+            _ => "stop" // Default fallback for unknown reasons
         };
     }
 

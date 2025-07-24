@@ -132,20 +132,25 @@ public class LLamaTextGenerationEngine : BaseTextGenerationEngine
     /// </summary>
     private InferenceParams CreateInferenceParams(GenerationRequest request)
     {
-        // Get anti-prompt strings
+        // Get anti-prompt strings from request parameters
         string[]? antiPrompt = null;
-        if (_parameters.TryGetValue("antiprompt", out var antiPromptObj) &&
+        if (request.Parameters?.TryGetValue("antiprompt", out var antiPromptObj) == true &&
             antiPromptObj is IEnumerable<string> antiPromptStrs)
         {
             antiPrompt = antiPromptStrs.ToArray();
         }
 
-        // Get repeat penalty
+        // Get repeat penalty from request parameters or use instance parameters as fallback
         float repeatPenalty = 1.1f;
-        if (_parameters.TryGetValue("repeat_penalty", out var repeatPenaltyObj) &&
+        if (request.Parameters?.TryGetValue("repeat_penalty", out var repeatPenaltyObj) == true &&
             repeatPenaltyObj is float rpValue)
         {
             repeatPenalty = rpValue;
+        }
+        else if (_parameters.TryGetValue("repeat_penalty", out var instanceRpObj) &&
+                 instanceRpObj is float instanceRpValue)
+        {
+            repeatPenalty = instanceRpValue;
         }
 
         // Create inference parameters using the factory

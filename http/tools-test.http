@@ -1,15 +1,45 @@
-### LMSupplyDepots Tools Test
-# Test tools functionality through Host API
+### LMSupplyDepots Tools Test Collection
+### Comprehensive testing of OpenAI-compatible tool functionality through Host API
 
 @baseUrl = http://localhost:5181
-
 @model = hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-IQ3_M
 @alias = alias123
 
+### 0. Load model for testing
+POST {{baseUrl}}/api/models/load
+Content-Type: application/json
+
+{
+  "model": "{{model}}"
+}
+
+###
+
 ### 1. List available models
 GET {{baseUrl}}/v1/models
+Accept: application/json
 
-### 2. Chat completion with tools (weather tool)
+###
+
+### 2. Simple Chat Completion (no tools)
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello! How are you today? Please introduce yourself."
+    }
+  ],
+  "max_completion_tokens": 150,
+  "temperature": 0.7
+}
+
+###
+
+### 3. Weather Tool Test - Basic
 POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
@@ -46,16 +76,18 @@ Content-Type: application/json
     }
   ],
   "tool_choice": "auto",
-  "max_completion_tokens": 150,
+  "max_completion_tokens": 200,
   "temperature": 0.7
 }
 
-### 3. Chat completion with calculator tool
+###
+
+### 4. Calculator Tool Test - Basic Math
 POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
-  "model": "alias123",
+  "model": "{{alias}}",
   "messages": [
     {
       "role": "user",
@@ -81,16 +113,19 @@ Content-Type: application/json
       }
     }
   ],
+  "tool_choice": "auto",
   "max_completion_tokens": 150,
   "temperature": 0.1
 }
 
-### 4. Chat completion with multiple tools available
+###
+
+### 5. Multiple Tools Available Test
 POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
-  "model": "alias123", 
+  "model": "{{alias}}", 
   "messages": [
     {
       "role": "user",
@@ -138,32 +173,79 @@ Content-Type: application/json
       }
     }
   ],
+  "tool_choice": "auto",
+  "max_completion_tokens": 300,
+  "temperature": 0.7
+}
+
+###
+
+### 6. Tool Choice - Force Specific Tool
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "I want to use the calculator for some math"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "calculator",
+        "description": "Perform mathematical calculations",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "string",
+              "description": "Mathematical expression to evaluate"
+            }
+          },
+          "required": ["expression"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and country, e.g. San Francisco, CA"
+            }
+          },
+          "required": ["location"]
+        }
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "function",
+    "function": {
+      "name": "calculator"
+    }
+  },
   "max_completion_tokens": 200,
   "temperature": 0.7
 }
 
-### 5. Chat completion without tools (regular chat)
+###
+
+### 7. Streaming Chat Completion with Tools
 POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
-  "model": "alias123",
-  "messages": [
-    {
-      "role": "user",
-      "content": "Hello! How are you today?"
-    }
-  ],
-  "max_completion_tokens": 100,
-  "temperature": 0.7
-}
-
-### 6. Streaming chat completion with tools
-POST {{baseUrl}}/v1/chat/completions
-Content-Type: application/json
-
-{
-  "model": "alias123",
+  "model": "{{alias}}",
   "messages": [
     {
       "role": "user",
@@ -195,16 +277,19 @@ Content-Type: application/json
     }
   ],
   "stream": true,
-  "max_completion_tokens": 200,
+  "tool_choice": "auto",
+  "max_completion_tokens": 250,
   "temperature": 0.8
 }
 
-### 7. Test tool call handling - conversation with tool result
+###
+
+### 8. Tool Call Conversation - Simulated Multi-turn
 POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
-  "model": "alias123",
+  "model": "{{alias}}",
   "messages": [
     {
       "role": "user",
@@ -219,7 +304,7 @@ Content-Type: application/json
           "type": "function",
           "function": {
             "name": "get_weather",
-            "arguments": "{\"location\": \"London, UK\"}"
+            "arguments": "{\"location\": \"London, UK\", \"unit\": \"celsius\"}"
           }
         }
       ]
@@ -227,46 +312,270 @@ Content-Type: application/json
     {
       "role": "tool",
       "tool_call_id": "call_12345",
-      "content": "{\"location\": \"London, UK\", \"temperature\": 15, \"condition\": \"Partly cloudy\", \"humidity\": 65, \"wind_speed\": 10}"
+      "content": "The weather in London, UK is currently 15°C with cloudy skies and light rain. Humidity is 78% and wind speed is 12 km/h."
     },
     {
       "role": "user", 
-      "content": "Based on this weather, should I take an umbrella?"
+      "content": "Based on this weather, should I take an umbrella and what should I wear?"
     }
   ],
-  "max_completion_tokens": 100,
+  "max_completion_tokens": 150,
   "temperature": 0.7
 }
 
-### 8. Test invalid tool call
+###
+
+### 9. Tool Execution Error Handling - Division by Zero
 POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
-  "model": "alias123",
+  "model": "{{alias}}",
   "messages": [
     {
       "role": "user",
-      "content": "Call an invalid tool please"
+      "content": "Calculate the result of dividing by zero: 10 / 0"
     }
   ],
   "tools": [
     {
       "type": "function",
       "function": {
-        "name": "invalid_tool",
-        "description": "This tool doesn't exist",
+        "name": "calculator",
+        "description": "Perform mathematical calculations",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "string",
+              "description": "Mathematical expression to evaluate"
+            }
+          },
+          "required": ["expression"]
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "max_completion_tokens": 200,
+  "temperature": 0.7
+}
+
+###
+
+### 10. Invalid Tool Test
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Use a tool that doesn't exist"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "non_existent_tool",
+        "description": "This tool doesn't exist in the system",
         "parameters": {
           "type": "object",
           "properties": {
             "param": {
               "type": "string"
             }
-          }
+          },
+          "required": ["param"]
         }
       }
     }
   ],
-  "max_completion_tokens": 100,
+  "tool_choice": "auto",
+  "max_completion_tokens": 150,
   "temperature": 0.7
 }
+
+###
+
+### 11. Complex Calculation Test
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Calculate the compound interest: principal=1000, rate=5%, time=3 years, compounded annually. Use the formula A = P(1 + r/n)^(nt)"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "calculator",
+        "description": "Perform mathematical calculations",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "string",
+              "description": "Mathematical expression to evaluate"
+            }
+          },
+          "required": ["expression"]
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "max_completion_tokens": 300,
+  "temperature": 0.3
+}
+
+###
+
+### 12. Weather for Multiple Cities
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Compare the weather between Seoul, Tokyo, and New York. Tell me which city has the best weather today."
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and country, e.g. San Francisco, CA"
+            },
+            "unit": {
+              "type": "string",
+              "enum": ["celsius", "fahrenheit"],
+              "description": "The temperature unit to use. Defaults to celsius."
+            }
+          },
+          "required": ["location"]
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true,
+  "max_completion_tokens": 400,
+  "temperature": 0.7
+}
+
+###
+
+### 13. Tool Choice - None (Disable Tools)
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What's the weather like in Paris? Just give me a general response without using any tools."
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and country"
+            }
+          },
+          "required": ["location"]
+        }
+      }
+    }
+  ],
+  "tool_choice": "none",
+  "max_completion_tokens": 150,
+  "temperature": 0.7
+}
+
+###
+
+### 14. High Temperature Creative Tool Usage
+POST {{baseUrl}}/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "{{alias}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "I'm planning a trip to somewhere warm. Can you help me find a good destination and calculate travel costs?"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and country, e.g. San Francisco, CA"
+            },
+            "unit": {
+              "type": "string",
+              "enum": ["celsius", "fahrenheit"],
+              "description": "The temperature unit to use. Defaults to celsius."
+            }
+          },
+          "required": ["location"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "calculator",
+        "description": "Perform mathematical calculations",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "string",
+              "description": "Mathematical expression to evaluate"
+            }
+          },
+          "required": ["expression"]
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "max_completion_tokens": 400,
+  "temperature": 0.9
+}
+
+###

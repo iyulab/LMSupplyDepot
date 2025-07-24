@@ -62,6 +62,8 @@ public partial class LMSupplyDepot
             string modelId = await ModelManager.ResolveModelKeyAsync(modelKey, cancellationToken);
 
             var status = ModelManager.GetDownloadStatus(modelId);
+            if (status == null) return null;
+
             var progress = ModelManager.GetDownloadProgress(modelId);
             var allDownloads = await ModelManager.GetAllDownloadsAsync(cancellationToken);
             var repository = _serviceProvider.GetRequiredService<IModelRepository>();

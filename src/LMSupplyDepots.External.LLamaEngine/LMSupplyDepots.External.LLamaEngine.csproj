@@ -13,4 +13,12 @@
 				<PackageReference Include="LLamaSharp.Backend.Vulkan" Version="0.24.0" />
 				<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.5" />
 		</ItemGroup>
+		
+		<ItemGroup>
+				<Compile Remove="Examples\**" />
+				<Compile Remove="Extensions\ServiceCollectionExtensions.cs" />
+				<Compile Remove="Services\ModelMetadataExtractor.cs" />
+				<Compile Remove="Services\DynamicChatTemplateService.cs" />
+				<Compile Remove="Services\LlamaModelMetadataService.cs" />
+		</ItemGroup>
 </Project>

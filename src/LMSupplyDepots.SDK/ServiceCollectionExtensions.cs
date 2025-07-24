@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using LMSupplyDepots.ModelHub.Repositories;
 using LMSupplyDepots.Inference.Services;
 using LMSupplyDepots.Inference.Adapters;
+using LMSupplyDepots.External.LLamaEngine.Extensions;
 using LMSupplyDepots.SDK.OpenAI.Services;
 using LMSupplyDepots.SDK.Tools;
 using System.Diagnostics;

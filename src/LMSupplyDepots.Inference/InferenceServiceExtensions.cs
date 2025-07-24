@@ -1,6 +1,7 @@
 using LMSupplyDepots.Inference.Adapters;
 using LMSupplyDepots.Inference.Configuration;
 using LMSupplyDepots.Inference.Services;
+using LMSupplyDepots.External.LLamaEngine.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;

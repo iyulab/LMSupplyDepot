@@ -12,14 +12,11 @@ public static class ParameterFactory
         float topP = 0.9f,
         float repeatPenalty = 1.1f)
     {
-        // Using collection expression for antiprompt
-        antiprompt ??= ["User:", "Assistant:", "\n\n"];
-
         // Set inference parameters
         return new InferenceParams
         {
             MaxTokens = maxTokens,
-            AntiPrompts = [.. antiprompt],
+            AntiPrompts = antiprompt != null ? [.. antiprompt] : [], // Empty by default
             SamplingPipeline = new DefaultSamplingPipeline
             {
                 Temperature = temperature,

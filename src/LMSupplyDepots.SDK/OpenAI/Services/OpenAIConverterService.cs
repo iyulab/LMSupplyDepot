@@ -84,7 +84,7 @@ public class OpenAIConverterService : IOpenAIConverterService
             var stopSequences = ConvertStopSequence(request.Stop);
             if (stopSequences.Count > 0)
             {
-                generationRequest.Parameters["stop"] = stopSequences;
+                generationRequest.Parameters["antiprompt"] = stopSequences;
             }
         }
 

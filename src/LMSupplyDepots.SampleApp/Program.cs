@@ -2,12 +2,12 @@ using LMSupplyDepots.SDK;
 using LMSupplyDepots.SDK.OpenAI.Models;
 using Microsoft.Extensions.Logging;
 
-Console.WriteLine("🚀 LMSupplyDepots Tool Workflow Demo");
-Console.WriteLine("=====================================\n");
+Console.WriteLine("🚀 LMSupplyDepots Simple Text Generation Test");
+Console.WriteLine("============================================\n");
 
 // Configure logging
 using var loggerFactory = LoggerFactory.Create(builder =>
-    builder.AddConsole().SetMinimumLevel(LogLevel.Information));
+    builder.AddConsole().SetMinimumLevel(LogLevel.Debug));
 
 // Configure options
 var options = new LMSupplyDepotOptions
@@ -21,25 +21,19 @@ var depot = new LMSupplyDepot(options, loggerFactory);
 try
 {
     // Load model
-    var modelKey = "hf:bartowski/microsoft_Phi-4-mini-instruct-GGUF/microsoft_Phi-4-mini-instruct-Q8_0";
+    // Test with different model types to verify dynamic architecture detection
+    var modelKey = args.Length > 0 ? args[0] : "hf:bartowski/microsoft_Phi-4-mini-instruct-GGUF/microsoft_Phi-4-mini-instruct-Q8_0";
+
     Console.WriteLine($"📥 Loading model: {modelKey}");
 
     await depot.LoadModelAsync(modelKey);
     Console.WriteLine("✅ Model loaded!\n");
 
-    // Sample tool functions
-    Console.WriteLine("🔧 Sample Tool Functions Available:");
-    Console.WriteLine("- get_weather: Get current weather for a location");
-    Console.WriteLine("- calculate: Perform mathematical calculations");
-    Console.WriteLine("- get_time: Get current time\n");
+    // Test 1: Simple text generation without tools
+    Console.WriteLine("🤖 Test 1: Simple Text Generation");
+    Console.WriteLine("==================================");
 
-    // User request
-    var userQuestion = "What's the weather like in Seoul and what time is it now?";
-    Console.WriteLine($"👤 User: {userQuestion}\n");
-
-    // Step 1: Initial request with tools
-    Console.WriteLine("🤖 Step 1: Asking AI assistant with available tools...");
-    var request = new OpenAIChatCompletionRequest
+    var simpleRequest = new OpenAIChatCompletionRequest
     {
         Model = modelKey,
         Messages = new List<OpenAIChatMessage>
@@ -47,7 +41,48 @@ try
             new()
             {
                 Role = "user",
-                Content = new TextContentPart { Text = userQuestion }
+                Content = new TextContentPart { Text = "Tell me a short joke about programming." }
+            }
+        },
+        MaxCompletionTokens = 100,
+        Temperature = 1.0f,
+        TopP = 1.0f,
+        FrequencyPenalty = 0.0f,
+        PresencePenalty = 0.0f
+        // No stop sequences to prevent early termination
+    };
+
+    Console.WriteLine("👤 User: Tell me a short joke about programming.");
+
+    var simpleResponse = await depot.CreateChatCompletionAsync(simpleRequest);
+    var simpleMessage = simpleResponse.Choices[0].Message;
+
+    Console.WriteLine($"🔍 Response details: Choices count: {simpleResponse.Choices.Count}");
+    Console.WriteLine($"🔍 Message content type: {simpleMessage.Content?.GetType().Name}");
+
+    if (simpleMessage.Content is TextContentPart simpleContent)
+    {
+        Console.WriteLine($"🤖 Assistant: {simpleContent.Text}\n");
+        Console.WriteLine($"🔍 Text length: {simpleContent.Text?.Length ?? 0}");
+    }
+    else
+    {
+        Console.WriteLine($"🤖 Assistant: (No text content - type: {simpleMessage.Content?.GetType().Name})\n");
+    }
+
+    // Test 2: Tool-enabled text generation
+    Console.WriteLine("🔧 Test 2: Tool-Enabled Generation");
+    Console.WriteLine("===================================");
+
+    var toolRequest = new OpenAIChatCompletionRequest
+    {
+        Model = modelKey,
+        Messages = new List<OpenAIChatMessage>
+        {
+            new()
+            {
+                Role = "user",
+                Content = new TextContentPart { Text = "현재 시간을 알려주세요." }
             }
         },
         Tools = new List<Tool>
@@ -57,30 +92,8 @@ try
                 Type = "function",
                 Function = new FunctionDefinition
                 {
-                    Name = "get_weather",
-                    Description = "Get the current weather for a specific location",
-                    Parameters = new Dictionary<string, object>
-                    {
-                        ["type"] = "object",
-                        ["properties"] = new Dictionary<string, object>
-                        {
-                            ["location"] = new Dictionary<string, object>
-                            {
-                                ["type"] = "string",
-                                ["description"] = "The location to get weather for"
-                            }
-                        },
-                        ["required"] = new[] { "location" }
-                    }
-                }
-            },
-            new()
-            {
-                Type = "function",
-                Function = new FunctionDefinition
-                {
                     Name = "get_time",
-                    Description = "Get the current time",
+                    Description = "현재 시간을 가져옵니다",
                     Parameters = new Dictionary<string, object>
                     {
                         ["type"] = "object",
@@ -89,80 +102,45 @@ try
                 }
             }
         },
-        MaxCompletionTokens = 200,
-        Temperature = 0.1f
+        MaxCompletionTokens = 256, // Sufficient tokens for tool calling
+        Temperature = 0.6f, // Moderate temperature for tool usage
+        TopP = 0.9f,
+        FrequencyPenalty = 0.0f,
+        PresencePenalty = 0.0f
     };
 
-    var response = await depot.CreateChatCompletionAsync(request);
-    var assistantMessage = response.Choices[0].Message;
+    Console.WriteLine("👤 User: 현재 시간을 알려주세요.");
 
-    Console.WriteLine($"🤖 Assistant Response:");
-    if (assistantMessage.Content is TextContentPart content)
+    var toolResponse = await depot.CreateChatCompletionAsync(toolRequest);
+    var toolMessage = toolResponse.Choices[0].Message;
+
+    Console.WriteLine($"🔍 Tool response details: Choices count: {toolResponse.Choices.Count}");
+    Console.WriteLine($"🔍 Tool message content type: {toolMessage.Content?.GetType().Name}");
+
+    if (toolMessage.Content is TextContentPart toolContent)
     {
-        Console.WriteLine($"   💬 Message: {content.Text}");
+        Console.WriteLine($"🤖 Assistant (with tools): {toolContent.Text}");
+        Console.WriteLine($"🔍 Tool text length: {toolContent.Text?.Length ?? 0}");
+    }
+    else
+    {
+        Console.WriteLine($"🤖 Assistant (with tools): (No text content - type: {toolMessage.Content?.GetType().Name})");
     }
 
-    // Step 2: Check if assistant wants to call tools
-    if (assistantMessage.ToolCalls?.Count > 0)
+    if (toolMessage.ToolCalls?.Count > 0)
     {
-        Console.WriteLine($"\n🔧 Step 2: Assistant requested {assistantMessage.ToolCalls.Count} tool call(s):");
-
-        var conversationMessages = new List<OpenAIChatMessage>(request.Messages)
+        Console.WriteLine($"🔧 Tool calls requested: {toolMessage.ToolCalls.Count}");
+        foreach (var toolCall in toolMessage.ToolCalls)
         {
-            assistantMessage
-        };
-
-        foreach (var toolCall in assistantMessage.ToolCalls)
-        {
-            var functionName = toolCall.Function?.Name;
-            var arguments = toolCall.Function?.Arguments;
-
-            Console.WriteLine($"   🛠️  Calling {functionName} with arguments: {arguments}");
-
-            // Simulate tool execution
-            string toolResult = functionName switch
-            {
-                "get_weather" => "{\"location\": \"Seoul\", \"temperature\": \"15°C\", \"condition\": \"Partly cloudy\", \"humidity\": \"65%\"}",
-                "get_time" => $"{{\"current_time\": \"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\", \"timezone\": \"Local\"}}",
-                _ => "{\"error\": \"Tool not found\"}"
-            };
-
-            Console.WriteLine($"   📋 Tool result: {toolResult}");
-
-            // Add tool response to conversation
-            conversationMessages.Add(new OpenAIChatMessage
-            {
-                Role = "tool",
-                Content = new TextContentPart { Text = toolResult },
-                ToolCallId = toolCall.Id
-            });
-        }
-
-        // Step 3: Ask assistant to provide final response
-        Console.WriteLine("\n🤖 Step 3: Getting final response from assistant...");
-
-        var finalRequest = new OpenAIChatCompletionRequest
-        {
-            Model = modelKey,
-            Messages = conversationMessages,
-            MaxCompletionTokens = 200,
-            Temperature = 0.1f
-        };
-
-        var finalResponse = await depot.CreateChatCompletionAsync(finalRequest);
-        var finalMessage = finalResponse.Choices[0].Message;
-
-        if (finalMessage.Content is TextContentPart finalContent)
-        {
-            Console.WriteLine($"🎯 Final Answer: {finalContent.Text}");
+            Console.WriteLine($"   - {toolCall.Function?.Name}: {toolCall.Function?.Arguments}");
         }
     }
     else
     {
-        Console.WriteLine("ℹ️  No tool calls requested by assistant.");
+        Console.WriteLine("ℹ️  No tool calls detected in response");
     }
 
-    Console.WriteLine("\n✅ Tool workflow completed successfully!");
+    Console.WriteLine("\n✅ Both tests completed successfully!");
 }
 catch (Exception ex)
 {
@@ -173,5 +151,4 @@ catch (Exception ex)
     }
 }
 
-Console.WriteLine("\n🎯 Demo completed. Press any key to exit...");
-Console.ReadKey();
+Console.WriteLine("\n🎯 Tests completed.");

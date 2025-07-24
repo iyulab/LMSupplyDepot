@@ -54,6 +54,14 @@ public class ContentPartConverter : JsonConverter<ContentPart?>
             return;
         }
 
+        // For TextContentPart, write just the text string directly for OpenAI compatibility
+        if (value is TextContentPart textPart)
+        {
+            writer.WriteStringValue(textPart.Text);
+            return;
+        }
+
+        // For other types, serialize the full object
         JsonSerializer.Serialize(writer, value, value.GetType(), options);
     }
 }

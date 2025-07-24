@@ -130,7 +130,7 @@ public class OpenAIConverterService : IOpenAIConverterService
                     Message = new OpenAIChatMessage
                     {
                         Role = "assistant",
-                        Content = new TextContentPart { Text = response.Text }
+                        Content = response.Text // Use string directly for OpenAI compatibility
                     },
                     FinishReason = ConvertFinishReason(response.FinishReason)
                 }

@@ -19,14 +19,6 @@ Content-Type: application/json
   "model": "kanana"
 }
 
-### Load model for testing
-POST {{baseUrl}}/api/models/unload
-Content-Type: application/json
-
-{
-  "model": "alias123"
-}
-
 ### Set alias for easier testing
 PUT {{baseUrl}}/api/alias
 Content-Type: application/json
@@ -63,7 +55,7 @@ POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
-  "model": "alias123",
+  "model": "kanana",
   "messages": [
     {
       "role": "user",
@@ -149,7 +141,7 @@ POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
-  "model": "{{model}}",
+  "model": "{{alias}}",
   "messages": [
     {
       "role": "user",

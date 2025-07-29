@@ -1,9 +1,9 @@
 # ### V1 API Tests (OpenAI Compatible)
-@baseUrl = http://localhost:5181
+# @baseUrl = http://localhost:5181
 
 # Filer Proxy
 # @baseUrl = http://localhost:12100
-# @baseUrl = http://localhost:27010/lm
+@baseUrl = http://localhost:27010
 
 @model = hf:bartowski/microsoft_Phi-4-mini-instruct-GGUF/microsoft_Phi-4-mini-instruct-Q8_0
 @alias = phi
@@ -158,11 +158,13 @@ Content-Type: application/json
 }
 
 ### 5. Chat Completions - Streaming (SSE)
+# "model": "local/phi",
+# "model": "openai/gpt-4.1",
 POST {{baseUrl}}/v1/chat/completions
 Content-Type: application/json
 
 {
-  "model": "{{alias}}",
+  "model": "local/phi",
   "messages": [
     {
       "role": "user",
@@ -174,12 +176,25 @@ Content-Type: application/json
   "stream": true
 }
 
-#### Expected Streaming Response:
-# data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1753061806,"model":"alias13","choices":[{"index":0,"delta":{"content":"Once"},"finish_reason":null}]}
-# data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1753061806,"model":"alias13","choices":[{"index":0,"delta":{"content":" upon"},"finish_reason":null}]}
-# ...
-# data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1753061806,"model":"alias13","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
-# data: [DONE]
+#### OpenAI Response:
+data: {"choices":[{"finish_reason":null,"index":0,"delta":{"name":null,"content":"","refusal":null,"annotations":null,"audio":null,"tool_calls":null},"logprobs":null}],"created":"2025-07-29T07:57:06.0000000","id":"chatcmpl-ByZUoytzoww9m8raRVLiiNJacIYd7","model":"gpt-4.1-mini-2025-04-14","object":"chat.completion.chunk","service_tier":"default","system_fingerprint":"fp_658b958c37","usage":null}
+
+data: {"choices":[{"finish_reason":null,"index":0,"delta":{"name":null,"content":"In","refusal":null,"annotations":null,"audio":null,"tool_calls":null},"logprobs":null}],"created":"2025-07-29T07:57:06.0000000","id":"chatcmpl-ByZUoytzoww9m8raRVLiiNJacIYd7","model":"gpt-4.1-mini-2025-04-14","object":"chat.completion.chunk","service_tier":"default","system_fingerprint":"fp_658b958c37","usage":null}
+
+...
+
+data: [DONE]
+
+#### Local Model Response
+data: {"choices":[{"finish_reason":null,"index":0,"delta":{"name":null,"content":"{\"id\":\"chatcmpl-6b5f6ec457794550807f72fa9669d7c6\",\"object\":\"chat.completion.chunk\",\"created\":1753776006,\"model\":\"phi\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" Once\"},\"finish_reason\":null}]}","refusal":null,"annotations":null,"audio":null,"tool_calls":null},"logprobs":null}],"created":"2025-07-29T08:00:02.0000000","id":"chatcmpl-88c9c781529145f6921098b35ee4fc8f","model":"phi","object":"chat.completion.chunk","service_tier":null,"system_fingerprint":null,"usage":null}
+
+data: {"choices":[{"finish_reason":null,"index":0,"delta":{"name":null,"content":"{\"id\":\"chatcmpl-1d32b9782ce54282855cb0ffc5717f9f\",\"object\":\"chat.completion.chunk\",\"created\":1753776006,\"model\":\"phi\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" upon\"},\"finish_reason\":null}]}","refusal":null,"annotations":null,"audio":null,"tool_calls":null},"logprobs":null}],"created":"2025-07-29T08:00:02.0000000","id":"chatcmpl-88c9c781529145f6921098b35ee4fc8f","model":"phi","object":"chat.completion.chunk","service_tier":null,"system_fingerprint":null,"usage":null}
+
+...
+
+data: [DONE]
+
+
 
 ### 6. Embeddings - Single Text
 POST {{baseUrl}}/v1/embeddings

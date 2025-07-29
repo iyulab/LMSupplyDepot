@@ -123,6 +123,13 @@ public static class ServiceCollectionExtensions
         // Add LLama backend if available
         AddLLamaBackend(services);
 
+        // Register model metadata service
+        services.TryAddSingleton<LMSupplyDepots.SDK.Services.IModelMetadataService>(provider =>
+        {
+            // Use a simple stub implementation for now
+            var logger = provider.GetRequiredService<ILogger<LMSupplyDepots.SDK.Services.StubModelMetadataService>>();
+            return new LMSupplyDepots.SDK.Services.StubModelMetadataService(logger);
+        });
     }
 
     /// <summary>

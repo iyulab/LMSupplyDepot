@@ -16,6 +16,7 @@ public class V1ControllerTests
 {
     private readonly Mock<IHostService> _mockHostService;
     private readonly Mock<IToolExecutionService> _mockToolExecutionService;
+    private readonly Mock<IDynamicToolService> _mockDynamicToolService;
     private readonly Mock<ILogger<V1Controller>> _mockLogger;
     private readonly Mock<IServiceProvider> _mockServiceProvider;
     private readonly V1Controller _controller;
@@ -24,12 +25,14 @@ public class V1ControllerTests
     {
         _mockHostService = new Mock<IHostService>();
         _mockToolExecutionService = new Mock<IToolExecutionService>();
+        _mockDynamicToolService = new Mock<IDynamicToolService>();
         _mockLogger = new Mock<ILogger<V1Controller>>();
         _mockServiceProvider = new Mock<IServiceProvider>();
 
         _controller = new V1Controller(
             _mockHostService.Object,
             _mockToolExecutionService.Object,
+            _mockDynamicToolService.Object,
             _mockLogger.Object,
             _mockServiceProvider.Object);
     }

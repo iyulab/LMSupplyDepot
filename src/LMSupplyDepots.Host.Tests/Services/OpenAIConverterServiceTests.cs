@@ -3,6 +3,8 @@ using LMSupplyDepots.Models;
 using LMSupplyDepots.Contracts;
 using LMSupplyDepots.SDK.OpenAI.Services;
 using LMSupplyDepots.SDK.OpenAI.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LMSupplyDepots.Host.Tests.Services;
 
@@ -15,7 +17,8 @@ public class OpenAIConverterServiceTests
 
     public OpenAIConverterServiceTests()
     {
-        _converterService = new OpenAIConverterService();
+        var logger = NullLogger<OpenAIConverterService>.Instance;
+        _converterService = new OpenAIConverterService(logger);
     }
 
     #region Model Conversion Tests
@@ -363,6 +366,34 @@ public class OpenAIConverterServiceTests
         // Assert
         Assert.Contains("User: ", result);
         Assert.Contains("Assistant: ", result);
+    }
+
+    #endregion
+
+    #region Streaming Tests
+
+    [Fact]
+    public void ConvertMessagesToPrompt_ShouldReturnRawTextTokens()
+    {
+        // Arrange
+        var messages = new List<OpenAIChatMessage>
+        {
+            new() { Role = "system", Content = new TextContentPart { Text = "You are helpful" } },
+            new() { Role = "user", Content = new TextContentPart { Text = "Hello" } }
+        };
+
+        // Act
+        var result = _converterService.ConvertMessagesToPrompt(messages);
+
+        // Assert
+        Assert.IsType<string>(result);
+        Assert.Contains("You are helpful", result);
+        Assert.Contains("Hello", result);
+
+        // Ensure it's a plain text prompt, not JSON
+        Assert.DoesNotContain("{", result);
+        Assert.DoesNotContain("\"delta\"", result);
+        Assert.DoesNotContain("chat.completion.chunk", result);
     }
 
     #endregion

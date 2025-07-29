@@ -35,6 +35,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IHostService, HostService>();
         services.TryAddSingleton<IToolExecutionService, ToolExecutionService>();
 
+        // Register dynamic tool service
+        services.TryAddSingleton<IDynamicToolService, DynamicToolService>();
+
         return services;
     }
 }

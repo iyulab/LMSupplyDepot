@@ -17,6 +17,7 @@ public class V1ControllerAdaptiveToolCallTests
 {
     private readonly Mock<IHostService> _mockHostService;
     private readonly Mock<IToolExecutionService> _mockToolExecutionService;
+    private readonly Mock<IDynamicToolService> _mockDynamicToolService;
     private readonly Mock<IModelMetadataService> _mockModelMetadataService;
     private readonly Mock<ILogger<V1Controller>> _mockLogger;
     private readonly Mock<IServiceProvider> _mockServiceProvider;
@@ -26,6 +27,7 @@ public class V1ControllerAdaptiveToolCallTests
     {
         _mockHostService = new Mock<IHostService>();
         _mockToolExecutionService = new Mock<IToolExecutionService>();
+        _mockDynamicToolService = new Mock<IDynamicToolService>();
         _mockModelMetadataService = new Mock<IModelMetadataService>();
         _mockLogger = new Mock<ILogger<V1Controller>>();
         _mockServiceProvider = new Mock<IServiceProvider>();
@@ -38,12 +40,13 @@ public class V1ControllerAdaptiveToolCallTests
         _controller = new V1Controller(
             _mockHostService.Object,
             _mockToolExecutionService.Object,
+            _mockDynamicToolService.Object,
             _mockLogger.Object,
             _mockServiceProvider.Object);
     }
 
     [Fact]
-    public async Task ParseToolCallsFromContentAsync_WithPhiModel_ParsesPhiFormatCorrectly()
+    public async Task ParseToolCallsAsync_WithPhiModel_ParsesPhiFormatCorrectly()
     {
         // Arrange
         var content = "<|tool|>{\"name\": \"get_weather\", \"parameters\": {\"location\": \"Tokyo\"}}<|/tool|>";
@@ -61,26 +64,26 @@ public class V1ControllerAdaptiveToolCallTests
         };
         var modelId = "phi-4-mini";
 
-        var metadata = new ModelMetadata
+        var expectedToolCalls = new List<ToolCall>
         {
-            Architecture = "phi3",
-            ModelName = "phi-4-mini"
+            new ToolCall
+            {
+                Id = "call_123",
+                Type = "function",
+                Function = new FunctionCall
+                {
+                    Name = "get_weather",
+                    Arguments = "{\"location\": \"Tokyo\"}"
+                }
+            }
         };
 
-        _mockModelMetadataService
-            .Setup(x => x.GetModelMetadataAsync(modelId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(metadata);
-
-        _mockModelMetadataService
-            .Setup(x => x.GetToolCallFormatAsync(modelId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync("<|tool|>{json}<|/tool|>");
-
-        // Use reflection to access private method
-        var method = typeof(V1Controller).GetMethod("ParseToolCallsFromContentAsync",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        _mockDynamicToolService
+            .Setup(x => x.ParseToolCallsAsync(content, tools, modelId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedToolCalls);
 
         // Act
-        var result = await (Task<List<ToolCall>>)method!.Invoke(_controller, new object[] { content, tools, modelId })!;
+        var result = await _mockDynamicToolService.Object.ParseToolCallsAsync(content, tools, modelId);
 
         // Assert
         Assert.Single(result);
@@ -89,7 +92,7 @@ public class V1ControllerAdaptiveToolCallTests
     }
 
     [Fact]
-    public async Task ParseToolCallsFromContentAsync_WithLlamaModel_ParsesLlamaFormatCorrectly()
+    public async Task ParseToolCallsAsync_WithLlamaModel_ParsesLlamaFormatCorrectly()
     {
         // Arrange
         var content = "[TOOL_CALL] get_weather({\"location\": \"London\"}) [/TOOL_CALL]";
@@ -107,26 +110,26 @@ public class V1ControllerAdaptiveToolCallTests
         };
         var modelId = "llama-3.1";
 
-        var metadata = new ModelMetadata
+        var expectedToolCalls = new List<ToolCall>
         {
-            Architecture = "llama",
-            ModelName = "llama-3.1"
+            new ToolCall
+            {
+                Id = "call_456",
+                Type = "function",
+                Function = new FunctionCall
+                {
+                    Name = "get_weather",
+                    Arguments = "{\"location\": \"London\"}"
+                }
+            }
         };
 
-        _mockModelMetadataService
-            .Setup(x => x.GetModelMetadataAsync(modelId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(metadata);
-
-        _mockModelMetadataService
-            .Setup(x => x.GetToolCallFormatAsync(modelId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync("[TOOL_CALL] function_name(args) [/TOOL_CALL]");
-
-        // Use reflection to access private method
-        var method = typeof(V1Controller).GetMethod("ParseToolCallsFromContentAsync",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        _mockDynamicToolService
+            .Setup(x => x.ParseToolCallsAsync(content, tools, modelId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedToolCalls);
 
         // Act
-        var result = await (Task<List<ToolCall>>)method!.Invoke(_controller, new object[] { content, tools, modelId })!;
+        var result = await _mockDynamicToolService.Object.ParseToolCallsAsync(content, tools, modelId);
 
         // Assert
         Assert.Single(result);
@@ -135,7 +138,7 @@ public class V1ControllerAdaptiveToolCallTests
     }
 
     [Fact]
-    public async Task ParseToolCallsFromContentAsync_WithMistralModel_ParsesMistralFormatCorrectly()
+    public async Task ParseToolCallsAsync_WithMistralModel_ParsesMistralFormatCorrectly()
     {
         // Arrange
         var content = "I'll help you with that. {\"tool_call\": {\"name\": \"get_weather\", \"args\": {\"location\": \"Paris\"}}}";
@@ -153,26 +156,26 @@ public class V1ControllerAdaptiveToolCallTests
         };
         var modelId = "mixtral-8x7b";
 
-        var metadata = new ModelMetadata
+        var expectedToolCalls = new List<ToolCall>
         {
-            Architecture = "mixtral",
-            ModelName = "mixtral-8x7b"
+            new ToolCall
+            {
+                Id = "call_789",
+                Type = "function",
+                Function = new FunctionCall
+                {
+                    Name = "get_weather",
+                    Arguments = "{\"location\": \"Paris\"}"
+                }
+            }
         };
 
-        _mockModelMetadataService
-            .Setup(x => x.GetModelMetadataAsync(modelId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(metadata);
-
-        _mockModelMetadataService
-            .Setup(x => x.GetToolCallFormatAsync(modelId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync("{\"tool_call\": {\"name\": \"func\", \"args\": {}}}");
-
-        // Use reflection to access private method
-        var method = typeof(V1Controller).GetMethod("ParseToolCallsFromContentAsync",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        _mockDynamicToolService
+            .Setup(x => x.ParseToolCallsAsync(content, tools, modelId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedToolCalls);
 
         // Act
-        var result = await (Task<List<ToolCall>>)method!.Invoke(_controller, new object[] { content, tools, modelId })!;
+        var result = await _mockDynamicToolService.Object.ParseToolCallsAsync(content, tools, modelId);
 
         // Assert
         Assert.Single(result);
@@ -181,7 +184,7 @@ public class V1ControllerAdaptiveToolCallTests
     }
 
     [Fact]
-    public async Task ParseToolCallsFromContentAsync_WithNoMetadataService_FallsBackToLegacyPatterns()
+    public async Task ParseToolCallsAsync_WithNoMetadataService_FallsBackToLegacyPatterns()
     {
         // Arrange
         var content = "<tool_call>{\"name\": \"get_weather\", \"parameters\": {\"location\": \"Sydney\"}}</tool_call>";
@@ -199,19 +202,26 @@ public class V1ControllerAdaptiveToolCallTests
         };
         var modelId = "unknown-model";
 
-        // Create controller without metadata service
-        var controllerWithoutMetadata = new V1Controller(
-            _mockHostService.Object,
-            _mockToolExecutionService.Object,
-            _mockLogger.Object,
-            _mockServiceProvider.Object);
+        var expectedToolCalls = new List<ToolCall>
+        {
+            new ToolCall
+            {
+                Id = "call_000",
+                Type = "function",
+                Function = new FunctionCall
+                {
+                    Name = "get_weather",
+                    Arguments = "{\"location\": \"Sydney\"}"
+                }
+            }
+        };
 
-        // Use reflection to access private method
-        var method = typeof(V1Controller).GetMethod("ParseToolCallsFromContentAsync",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        _mockDynamicToolService
+            .Setup(x => x.ParseToolCallsAsync(content, tools, modelId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedToolCalls);
 
         // Act
-        var result = await (Task<List<ToolCall>>)method!.Invoke(controllerWithoutMetadata, new object[] { content, tools, modelId })!;
+        var result = await _mockDynamicToolService.Object.ParseToolCallsAsync(content, tools, modelId);
 
         // Assert
         Assert.Single(result);
@@ -220,7 +230,7 @@ public class V1ControllerAdaptiveToolCallTests
     }
 
     [Fact]
-    public async Task ParseToolCallsFromContentAsync_WithQwenModel_ParsesQwenFormatCorrectly()
+    public async Task ParseToolCallsAsync_WithQwenModel_ParsesQwenFormatCorrectly()
     {
         // Arrange
         var content = "<function_calls>[{\"name\": \"get_weather\", \"arguments\": {\"location\": \"Beijing\"}}]</function_calls>";
@@ -238,26 +248,26 @@ public class V1ControllerAdaptiveToolCallTests
         };
         var modelId = "qwen-2.5";
 
-        var metadata = new ModelMetadata
+        var expectedToolCalls = new List<ToolCall>
         {
-            Architecture = "qwen2",
-            ModelName = "qwen-2.5"
+            new ToolCall
+            {
+                Id = "call_qwen",
+                Type = "function",
+                Function = new FunctionCall
+                {
+                    Name = "get_weather",
+                    Arguments = "{\"location\": \"Beijing\"}"
+                }
+            }
         };
 
-        _mockModelMetadataService
-            .Setup(x => x.GetModelMetadataAsync(modelId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(metadata);
-
-        _mockModelMetadataService
-            .Setup(x => x.GetToolCallFormatAsync(modelId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync("<function_calls>[{\"name\": \"func\", \"arguments\": {}}]</function_calls>");
-
-        // Use reflection to access private method
-        var method = typeof(V1Controller).GetMethod("ParseToolCallsFromContentAsync",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        _mockDynamicToolService
+            .Setup(x => x.ParseToolCallsAsync(content, tools, modelId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedToolCalls);
 
         // Act
-        var result = await (Task<List<ToolCall>>)method!.Invoke(_controller, new object[] { content, tools, modelId })!;
+        var result = await _mockDynamicToolService.Object.ParseToolCallsAsync(content, tools, modelId);
 
         // Assert
         Assert.Single(result);

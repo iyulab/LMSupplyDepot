@@ -1,7 +1,9 @@
 using LMSupplyDepots.SDK.OpenAI.Models;
 using LMSupplyDepots.Models;
 using LMSupplyDepots.Contracts;
+using LMSupplyDepots.SDK.Services;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 namespace LMSupplyDepots.SDK.OpenAI.Services;
 
@@ -18,7 +20,10 @@ public interface IOpenAIConverterService
     /// <summary>
     /// Converts OpenAI chat completion request to internal generation request
     /// </summary>
-    GenerationRequest ConvertToGenerationRequest(OpenAIChatCompletionRequest request);
+    Task<GenerationRequest> ConvertToGenerationRequestAsync(
+        OpenAIChatCompletionRequest request, 
+        IModelMetadataService? metadataService = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Converts internal generation response to OpenAI chat completion response
@@ -42,7 +47,7 @@ public interface IOpenAIConverterService
         string requestModel);
 
     /// <summary>
-    /// Extracts text content from OpenAI messages for LLama processing
+    /// Extracts text content from OpenAI messages for LLama processing (fallback method)
     /// </summary>
     string ConvertMessagesToPrompt(List<OpenAIChatMessage> messages);
 }
@@ -52,6 +57,13 @@ public interface IOpenAIConverterService
 /// </summary>
 public class OpenAIConverterService : IOpenAIConverterService
 {
+    private readonly ILogger<OpenAIConverterService> _logger;
+
+    public OpenAIConverterService(ILogger<OpenAIConverterService> logger)
+    {
+        _logger = logger;
+    }
+
     public OpenAIModel ConvertToOpenAIModel(LMModel model, long timestamp)
     {
         return new OpenAIModel
@@ -63,9 +75,56 @@ public class OpenAIConverterService : IOpenAIConverterService
         };
     }
 
-    public GenerationRequest ConvertToGenerationRequest(OpenAIChatCompletionRequest request)
+    public async Task<GenerationRequest> ConvertToGenerationRequestAsync(
+        OpenAIChatCompletionRequest request, 
+        IModelMetadataService? metadataService = null,
+        CancellationToken cancellationToken = default)
     {
-        var prompt = ConvertMessagesToPrompt(request.Messages);
+        string prompt;
+        string? modelArchitecture = null;
+
+        // Try to use model's native chat template if metadata service is available
+        if (metadataService != null)
+        {
+            try
+            {
+                var chatMessages = request.Messages.Select(msg => new ChatMessage
+                {
+                    Role = msg.Role.ToLowerInvariant(),
+                    Content = ExtractTextContent(msg.Content)
+                }).ToList();
+
+                prompt = await metadataService.ApplyChatTemplateAsync(
+                    request.Model,
+                    chatMessages,
+                    addGenerationPrompt: true,
+                    toolOptions: null, // TODO: Add tool support
+                    cancellationToken);
+
+                // Get model architecture for stop sequence filtering
+                try
+                {
+                    var metadata = await metadataService.GetModelMetadataAsync(request.Model, cancellationToken);
+                    modelArchitecture = metadata.Architecture;
+                }
+                catch
+                {
+                    // Ignore metadata errors, use fallback
+                }
+
+                _logger.LogDebug("Successfully applied native chat template for model {Model}", request.Model);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to apply native chat template for model {Model}, falling back to simple format", request.Model);
+                prompt = ConvertMessagesToPrompt(request.Messages);
+            }
+        }
+        else
+        {
+            _logger.LogDebug("No metadata service available, using fallback prompt format for model {Model}", request.Model);
+            prompt = ConvertMessagesToPrompt(request.Messages);
+        }
 
         var generationRequest = new GenerationRequest
         {
@@ -82,9 +141,28 @@ public class OpenAIConverterService : IOpenAIConverterService
         if (request.Stop != null)
         {
             var stopSequences = ConvertStopSequence(request.Stop);
+            
+            // Filter stop sequences to prevent conflicts with chat templates
+            if (!string.IsNullOrEmpty(modelArchitecture))
+            {
+                stopSequences = FilterStopSequencesForArchitecture(stopSequences, modelArchitecture);
+                
+                // Add architecture-specific default stop tokens if none remain
+                if (stopSequences.Count == 0)
+                {
+                    stopSequences = GetDefaultStopTokensForArchitecture(modelArchitecture);
+                    _logger.LogInformation("No valid stop sequences remain after filtering, using architecture defaults for {Architecture}: {StopTokens}", 
+                        modelArchitecture, string.Join(", ", stopSequences));
+                }
+            }
+            
             if (stopSequences.Count > 0)
             {
                 generationRequest.Parameters["antiprompt"] = stopSequences;
+            }
+            else
+            {
+                _logger.LogInformation("All stop sequences were filtered out due to conflicts with model architecture {Architecture}", modelArchitecture);
             }
         }
 
@@ -111,12 +189,23 @@ public class OpenAIConverterService : IOpenAIConverterService
         return generationRequest;
     }
 
+    /// <summary>
+    /// Legacy synchronous method for backward compatibility
+    /// </summary>
+    public GenerationRequest ConvertToGenerationRequest(OpenAIChatCompletionRequest request)
+    {
+        return ConvertToGenerationRequestAsync(request).GetAwaiter().GetResult();
+    }
+
     public OpenAIChatCompletionResponse ConvertToOpenAIResponse(
         GenerationResponse response,
         string requestModel,
         string completionId,
         long timestamp)
     {
+        // Clean the response text to remove any conversation formatting artifacts
+        var cleanedText = CleanResponseText(response.Text);
+
         return new OpenAIChatCompletionResponse
         {
             Id = completionId,
@@ -130,7 +219,7 @@ public class OpenAIConverterService : IOpenAIConverterService
                     Message = new OpenAIChatMessage
                     {
                         Role = "assistant",
-                        Content = response.Text // Use string directly for OpenAI compatibility
+                        Content = cleanedText
                     },
                     FinishReason = ConvertFinishReason(response.FinishReason)
                 }
@@ -221,6 +310,68 @@ public class OpenAIConverterService : IOpenAIConverterService
     }
 
     #region Private Helper Methods
+
+    /// <summary>
+    /// Cleans response text to remove conversation formatting artifacts
+    /// </summary>
+    private string CleanResponseText(string responseText)
+    {
+        if (string.IsNullOrEmpty(responseText))
+            return string.Empty;
+
+        var cleaned = responseText.Trim();
+
+        // Remove common conversation prefixes that models sometimes include
+        var prefixesToRemove = new[]
+        {
+            "Assistant:",
+            "ASSISTANT:",
+            "AI:",
+            "Bot:",
+            "Response:",
+            "Answer:"
+        };
+
+        foreach (var prefix in prefixesToRemove)
+        {
+            if (cleaned.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                cleaned = cleaned.Substring(prefix.Length).TrimStart();
+                break;
+            }
+        }
+
+        // Remove trailing conversation-like patterns
+        var linesToRemove = new[]
+        {
+            "User:",
+            "USER:",
+            "Human:",
+            "HUMAN:",
+            "\nUser:",
+            "\nUSER:",
+            "\nHuman:",
+            "\nHUMAN:"
+        };
+
+        foreach (var pattern in linesToRemove)
+        {
+            var index = cleaned.IndexOf(pattern, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0)
+            {
+                cleaned = cleaned.Substring(0, index).TrimEnd();
+                break;
+            }
+        }
+
+        // Remove excessive newlines
+        while (cleaned.Contains("\n\n\n"))
+        {
+            cleaned = cleaned.Replace("\n\n\n", "\n\n");
+        }
+
+        return cleaned.Trim();
+    }
 
     private string ConvertModelType(ModelType modelType)
     {
@@ -322,6 +473,88 @@ public class OpenAIConverterService : IOpenAIConverterService
         if (toolCall?.Function == null) return string.Empty;
 
         return $"{toolCall.Function.Name}({toolCall.Function.Arguments})";
+    }
+
+    /// <summary>
+    /// Filters stop sequences to prevent conflicts with chat template tokens
+    /// </summary>
+    private List<string> FilterStopSequencesForArchitecture(List<string> stopSequences, string architecture)
+    {
+        var architectureTokens = GetArchitectureTokens(architecture);
+        var filtered = new List<string>();
+
+        foreach (var stop in stopSequences)
+        {
+            bool conflicts = false;
+            
+            // Check if this stop sequence conflicts with template tokens
+            foreach (var templateToken in architectureTokens)
+            {
+                if (templateToken.Contains(stop) || stop.Contains(templateToken))
+                {
+                    _logger.LogWarning(
+                        "Stop sequence '{StopSequence}' conflicts with template token '{TemplateToken}' for architecture '{Architecture}', filtering out", 
+                        stop, templateToken, architecture);
+                    conflicts = true;
+                    break;
+                }
+            }
+
+            // Special handling for newlines in Phi models - they are structural parts of the template
+            if (architecture == "phi3" && IsNewlineStop(stop))
+            {
+                _logger.LogWarning(
+                    "Stop sequence '{StopSequence}' is a newline which conflicts with Phi template structure, filtering out", 
+                    stop);
+                conflicts = true;
+            }
+
+            if (!conflicts)
+            {
+                filtered.Add(stop);
+                _logger.LogDebug("Keeping stop sequence '{StopSequence}' for architecture '{Architecture}'", stop, architecture);
+            }
+        }
+
+        return filtered;
+    }
+
+    /// <summary>
+    /// Gets template tokens for specific architecture
+    /// </summary>
+    private List<string> GetArchitectureTokens(string architecture)
+    {
+        return architecture switch
+        {
+            "phi3" => new List<string> { "<|end|>", "<|assistant|>", "<|user|>", "<|system|>" },
+            "llama" => new List<string> { "</s>", "[INST]", "[/INST]", "<<SYS>>", "<</SYS>>" },
+            "mistral" or "mixtral" => new List<string> { "</s>", "[INST]", "[/INST]" },
+            "qwen" => new List<string> { "<|im_end|>", "<|im_start|>" },
+            _ => new List<string>()
+        };
+    }
+
+    /// <summary>
+    /// Checks if a stop sequence is a newline variant
+    /// </summary>
+    private bool IsNewlineStop(string stop)
+    {
+        return stop == "\n" || stop == "\\n" || stop == "\r\n" || stop == "\\r\\n";
+    }
+
+    /// <summary>
+    /// Gets appropriate default stop tokens for specific architecture
+    /// </summary>
+    private List<string> GetDefaultStopTokensForArchitecture(string architecture)
+    {
+        return architecture switch
+        {
+            "phi3" => new List<string> { "<|end|>" },
+            "llama" => new List<string> { "</s>" },
+            "mistral" or "mixtral" => new List<string> { "</s>" },
+            "qwen" => new List<string> { "<|im_end|>" },
+            _ => new List<string>()
+        };
     }
 
     #endregion

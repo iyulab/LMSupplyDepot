@@ -85,8 +85,9 @@ public partial class LMSupplyDepot
             await ApplyModelSpecificToolFormattingAsync(request, model.Id, cancellationToken);
         }
 
-        // Convert OpenAI request to internal format
-        var generationRequest = OpenAIConverter.ConvertToGenerationRequest(request);
+        // Convert OpenAI request to internal format using metadata service
+        var generationRequest = await OpenAIConverter.ConvertToGenerationRequestAsync(
+            request, ModelMetadataService, cancellationToken);
 
         // Debug: Log the request details
         _logger.LogDebug("Generated request messages count: {Count}", request.Messages.Count);
@@ -218,11 +219,13 @@ public partial class LMSupplyDepot
             throw new InvalidOperationException($"Model '{request.Model}' does not support text generation");
         }
 
-        // Convert OpenAI request to internal format
-        var generationRequest = OpenAIConverter.ConvertToGenerationRequest(request);
+        // Convert OpenAI request to internal format using metadata service
+        var generationRequest = await OpenAIConverter.ConvertToGenerationRequestAsync(
+            request, ModelMetadataService, cancellationToken);
         generationRequest.Stream = true;
 
-        // Generate streaming text
+        // Generate streaming text and return raw tokens
+        // The V1Controller will handle formatting these into proper SSE responses
         await foreach (var chunk in GenerateTextStreamAsync(
             request.Model,
             generationRequest.Prompt,
@@ -232,28 +235,9 @@ public partial class LMSupplyDepot
             generationRequest.Parameters,
             cancellationToken))
         {
-            // Format as OpenAI streaming response
-            var completionId = $"chatcmpl-{Guid.NewGuid():N}";
-            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
-            var streamResponse = new
-            {
-                id = completionId,
-                @object = "chat.completion.chunk",
-                created = timestamp,
-                model = request.Model,
-                choices = new[]
-                {
-                    new
-                    {
-                        index = 0,
-                        delta = new { content = chunk },
-                        finish_reason = (string?)null // Cannot determine if complete from string chunk
-                    }
-                }
-            };
-
-            yield return System.Text.Json.JsonSerializer.Serialize(streamResponse);
+            // Return raw text tokens instead of pre-formatted JSON
+            // The controller layer will handle the SSE formatting
+            yield return chunk;
         }
     }
 

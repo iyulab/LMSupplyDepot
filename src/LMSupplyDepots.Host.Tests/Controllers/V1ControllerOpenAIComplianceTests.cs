@@ -2,13 +2,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
 using LMSupplyDepots.Host.Controllers;
-using LMSupplyDepots.Host;
-using LMSupplyDepots.Host.Services;
 using LMSupplyDepots.Models;
 using LMSupplyDepots.Contracts;
-using LMSupplyDepots.Host.Models.OpenAI;
 using Xunit;
-using System.Text.Json;
+using LMSupplyDepots.SDK.OpenAI.Services;
+using LMSupplyDepots.SDK.OpenAI.Models;
 
 namespace LMSupplyDepots.Host.Tests.Controllers;
 

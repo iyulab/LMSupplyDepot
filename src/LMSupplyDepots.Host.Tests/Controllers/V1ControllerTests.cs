@@ -1,8 +1,6 @@
-using LMSupplyDepots.Host;
 using LMSupplyDepots.Host.Controllers;
-using LMSupplyDepots.Host.Models.OpenAI;
-using LMSupplyDepots.Host.Services;
 using LMSupplyDepots.Models;
+using LMSupplyDepots.SDK.OpenAI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;

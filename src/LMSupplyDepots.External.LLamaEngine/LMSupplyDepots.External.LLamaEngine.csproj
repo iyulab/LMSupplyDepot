@@ -11,7 +11,7 @@
 				<PackageReference Include="LLamaSharp.Backend.Cuda11" Version="0.24.0" />
 				<PackageReference Include="LLamaSharp.Backend.Cuda12" Version="0.24.0" />
 				<PackageReference Include="LLamaSharp.Backend.Vulkan" Version="0.24.0" />
-				<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.5" />
+				<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.7" />
 		</ItemGroup>
 		
 		<ItemGroup>

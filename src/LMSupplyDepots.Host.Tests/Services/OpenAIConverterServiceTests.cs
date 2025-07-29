@@ -1,8 +1,8 @@
 using Xunit;
-using LMSupplyDepots.Host.Services;
-using LMSupplyDepots.Host.Models.OpenAI;
 using LMSupplyDepots.Models;
 using LMSupplyDepots.Contracts;
+using LMSupplyDepots.SDK.OpenAI.Services;
+using LMSupplyDepots.SDK.OpenAI.Models;
 
 namespace LMSupplyDepots.Host.Tests.Services;
 

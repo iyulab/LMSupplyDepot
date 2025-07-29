@@ -1,5 +1,5 @@
+using LMSupplyDepots.SDK.OpenAI.Models;
 using System.Text.Json;
-using LMSupplyDepots.Host.Models.OpenAI;
 
 namespace LMSupplyDepots.Host.Tests.Verification;
 

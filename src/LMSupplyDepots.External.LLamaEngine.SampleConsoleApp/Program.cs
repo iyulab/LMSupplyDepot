@@ -1,8 +1,9 @@
-﻿using LMSupplyDepots.External.LLamaEngine;
+using LMSupplyDepots.External.LLamaEngine;
 using LMSupplyDepots.External.LLamaEngine.Services;
 using LMSupplyDepots.External.LLamaEngine.Chat;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using LMSupplyDepots.External.LLamaEngine.Extensions;
 
 var modelPath = @"D:\filer-data\models\text-generation\MaziyarPanahi\Llama-3.2-1B-Instruct-GGUF\Llama-3.2-1B-Instruct.fp16.gguf";
 var modelIdentifier = "MaziyarPanahi/Llama-3.2-1B-Instruct:Llama-3.2-1B-Instruct.fp16.gguf";

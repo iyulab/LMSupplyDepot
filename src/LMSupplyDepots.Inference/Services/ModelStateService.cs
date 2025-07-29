@@ -1,12 +1,22 @@
-﻿namespace LMSupplyDepots.Inference.Services;
+using System.Collections.Concurrent;
+using LMSupplyDepots.Models;
+using Microsoft.Extensions.Logging;
+
+namespace LMSupplyDepots.Inference.Services;
 
 /// <summary>
-/// Service for tracking model state and usage statistics
+/// Service for tracking model runtime state and usage statistics
 /// </summary>
 public class ModelStateService
 {
     private readonly ILogger<ModelStateService> _logger;
-    private readonly ConcurrentDictionary<string, ModelState> _modelStates = new();
+    private readonly ConcurrentDictionary<string, ModelRuntimeState> _modelStates = new();
+    private readonly ConcurrentDictionary<string, ModelUsageStatistics> _usageStats = new();
+
+    /// <summary>
+    /// Event fired when a model's status changes
+    /// </summary>
+    public event EventHandler<ModelStatusChangedEventArgs>? ModelStatusChanged;
 
     /// <summary>
     /// Initializes a new instance of the ModelStateService
@@ -17,11 +27,77 @@ public class ModelStateService
     }
 
     /// <summary>
-    /// Gets the state of a model
+    /// Gets the runtime state of a model
     /// </summary>
-    public ModelState GetModelState(string modelId)
+    public ModelRuntimeState GetModelState(string modelId)
     {
-        return _modelStates.GetOrAdd(modelId, _ => new ModelState(modelId));
+        return _modelStates.GetOrAdd(modelId, id => new ModelRuntimeState { ModelId = id });
+    }
+
+    /// <summary>
+    /// Updates the status of a model
+    /// </summary>
+    public void UpdateModelStatus(string modelId, ModelStatus status, string? errorMessage = null, string? adapterName = null)
+    {
+        var state = GetModelState(modelId);
+        var previousStatus = state.Status;
+
+        switch (status)
+        {
+            case ModelStatus.Loading:
+                state.SetLoading();
+                break;
+            case ModelStatus.Loaded:
+                state.SetLoaded(adapterName);
+                break;
+            case ModelStatus.Failed:
+                state.SetFailed(errorMessage ?? "Unknown error");
+                break;
+            case ModelStatus.Unloading:
+                state.SetUnloading();
+                break;
+            case ModelStatus.Unloaded:
+                state.SetUnloaded();
+                break;
+        }
+
+        _logger.LogInformation("Model {ModelId} status changed from {PreviousStatus} to {NewStatus}",
+            modelId, previousStatus, status);
+
+        // Fire the status change event
+        ModelStatusChanged?.Invoke(this, new ModelStatusChangedEventArgs
+        {
+            ModelId = modelId,
+            PreviousStatus = previousStatus,
+            NewStatus = status,
+            Timestamp = DateTime.UtcNow
+        });
+    }
+
+    /// <summary>
+    /// Checks if a model is loaded
+    /// </summary>
+    public bool IsModelLoaded(string modelId)
+    {
+        return _modelStates.TryGetValue(modelId, out var state) && state.IsAvailable;
+    }
+
+    /// <summary>
+    /// Gets all loaded models
+    /// </summary>
+    public IReadOnlyList<ModelRuntimeState> GetLoadedModels()
+    {
+        return _modelStates.Values
+            .Where(state => state.Status == ModelStatus.Loaded)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Gets all model states
+    /// </summary>
+    public IReadOnlyDictionary<string, ModelRuntimeState> GetAllModelStates()
+    {
+        return _modelStates;
     }
 
     /// <summary>
@@ -29,32 +105,27 @@ public class ModelStateService
     /// </summary>
     public void RecordModelUsage(string modelId, ModelUsageType usageType, TimeSpan duration, int? tokenCount = null)
     {
-        var state = GetModelState(modelId);
-        state.RecordUsage(usageType, duration, tokenCount);
+        var stats = _usageStats.GetOrAdd(modelId, _ => new ModelUsageStatistics(modelId));
+        stats.RecordUsage(usageType, duration, tokenCount);
 
         _logger.LogDebug("Recorded {UsageType} usage for model {ModelId}: {Duration}ms, {TokenCount} tokens",
             usageType, modelId, duration.TotalMilliseconds, tokenCount);
     }
 
     /// <summary>
-    /// Updates a model's loading state
+    /// Gets usage statistics for a model
     /// </summary>
-    public void UpdateModelLoadingState(string modelId, bool isLoaded)
+    public ModelUsageStatistics? GetModelUsageStatistics(string modelId)
     {
-        var state = GetModelState(modelId);
-        state.IsLoaded = isLoaded;
-        state.LastLoadStateChange = DateTime.UtcNow;
-
-        _logger.LogInformation("Model {ModelId} is now {LoadState}",
-            modelId, isLoaded ? "loaded" : "unloaded");
+        return _usageStats.TryGetValue(modelId, out var stats) ? stats : null;
     }
 
     /// <summary>
-    /// Gets all model states
+    /// Gets usage statistics for all models
     /// </summary>
-    public IReadOnlyDictionary<string, ModelState> GetAllModelStates()
+    public IReadOnlyDictionary<string, ModelUsageStatistics> GetAllUsageStatistics()
     {
-        return _modelStates;
+        return _usageStats;
     }
 
     /// <summary>
@@ -62,12 +133,47 @@ public class ModelStateService
     /// </summary>
     public void ClearModelUsageStats(string modelId)
     {
-        if (_modelStates.TryGetValue(modelId, out var state))
+        if (_usageStats.TryRemove(modelId, out _))
         {
-            state.ClearUsageStats();
             _logger.LogInformation("Cleared usage statistics for model {ModelId}", modelId);
         }
     }
+
+    /// <summary>
+    /// Removes a model from state tracking (when model is removed from system)
+    /// </summary>
+    public void RemoveModel(string modelId)
+    {
+        _modelStates.TryRemove(modelId, out _);
+        _usageStats.TryRemove(modelId, out _);
+        _logger.LogInformation("Removed model {ModelId} from state tracking", modelId);
+    }
+}
+
+/// <summary>
+/// Event arguments for model status changes
+/// </summary>
+public class ModelStatusChangedEventArgs : EventArgs
+{
+    /// <summary>
+    /// The model ID
+    /// </summary>
+    public string ModelId { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Previous status
+    /// </summary>
+    public ModelStatus PreviousStatus { get; init; }
+
+    /// <summary>
+    /// New status
+    /// </summary>
+    public ModelStatus NewStatus { get; init; }
+
+    /// <summary>
+    /// Timestamp of the change
+    /// </summary>
+    public DateTime Timestamp { get; init; }
 }
 
 /// <summary>
@@ -80,9 +186,9 @@ public enum ModelUsageType
 }
 
 /// <summary>
-/// Represents the state and usage statistics of a model
+/// Represents usage statistics for a model
 /// </summary>
-public class ModelState
+public class ModelUsageStatistics
 {
     private readonly object _lock = new();
 
@@ -92,19 +198,9 @@ public class ModelState
     public string ModelId { get; }
 
     /// <summary>
-    /// Whether the model is currently loaded
+    /// The time the model was first used
     /// </summary>
-    public bool IsLoaded { get; set; }
-
-    /// <summary>
-    /// The time the model was first loaded
-    /// </summary>
-    public DateTime? FirstLoadTime { get; private set; }
-
-    /// <summary>
-    /// The time the model's load state last changed
-    /// </summary>
-    public DateTime? LastLoadStateChange { get; set; }
+    public DateTime? FirstUsedTime { get; private set; }
 
     /// <summary>
     /// The time the model was last used
@@ -137,9 +233,9 @@ public class ModelState
     public TimeSpan TotalEmbeddingTime { get; private set; }
 
     /// <summary>
-    /// Initializes a new instance of ModelState
+    /// Initializes a new instance of ModelUsageStatistics
     /// </summary>
-    public ModelState(string modelId)
+    public ModelUsageStatistics(string modelId)
     {
         ModelId = modelId;
     }
@@ -151,12 +247,9 @@ public class ModelState
     {
         lock (_lock)
         {
-            LastUsedTime = DateTime.UtcNow;
-
-            if (FirstLoadTime == null && IsLoaded)
-            {
-                FirstLoadTime = DateTime.UtcNow;
-            }
+            var now = DateTime.UtcNow;
+            FirstUsedTime ??= now;
+            LastUsedTime = now;
 
             switch (usageType)
             {
@@ -180,10 +273,12 @@ public class ModelState
     /// <summary>
     /// Clears usage statistics
     /// </summary>
-    public void ClearUsageStats()
+    public void Clear()
     {
         lock (_lock)
         {
+            FirstUsedTime = null;
+            LastUsedTime = null;
             TextGenerationCount = 0;
             EmbeddingCount = 0;
             TotalTokensGenerated = 0;

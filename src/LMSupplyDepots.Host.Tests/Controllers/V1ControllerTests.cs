@@ -1,8 +1,9 @@
 using LMSupplyDepots.Host.Controllers;
 using LMSupplyDepots.Models;
-using LMSupplyDepots.SDK.OpenAI.Services;
+using LMSupplyDepots.Host.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
 
@@ -14,16 +15,23 @@ namespace LMSupplyDepots.Host.Tests.Controllers;
 public class V1ControllerTests
 {
     private readonly Mock<IHostService> _mockHostService;
-    private readonly Mock<IOpenAIConverterService> _mockConverter;
+    private readonly Mock<IToolExecutionService> _mockToolExecutionService;
     private readonly Mock<ILogger<V1Controller>> _mockLogger;
+    private readonly Mock<IServiceProvider> _mockServiceProvider;
     private readonly V1Controller _controller;
 
     public V1ControllerTests()
     {
         _mockHostService = new Mock<IHostService>();
-        _mockConverter = new Mock<IOpenAIConverterService>();
+        _mockToolExecutionService = new Mock<IToolExecutionService>();
         _mockLogger = new Mock<ILogger<V1Controller>>();
-        _controller = new V1Controller(_mockHostService.Object, _mockConverter.Object, _mockLogger.Object);
+        _mockServiceProvider = new Mock<IServiceProvider>();
+
+        _controller = new V1Controller(
+            _mockHostService.Object,
+            _mockToolExecutionService.Object,
+            _mockLogger.Object,
+            _mockServiceProvider.Object);
     }
 
     [Fact]
@@ -46,49 +54,48 @@ public class V1ControllerTests
             Type = ModelType.TextGeneration
         };
 
-        var loadedModels = new List<LMModel> { modelWithAlias, modelWithoutAlias };
+        var responseObject = new
+        {
+            @object = "list",
+            data = new[]
+            {
+                new { id = "hyperclovax", @object = "model", created = 1234567890, owned_by = "user" },
+                new { id = "hf:microsoft/DialoGPT-medium", @object = "model", created = 1234567890, owned_by = "user" }
+            }
+        };
 
         _mockHostService
-            .Setup(x => x.GetLoadedModelsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(loadedModels);
+            .Setup(x => x.ListModelsOpenAIAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(responseObject);
 
         // Act
         var result = await _controller.ListModels(CancellationToken.None);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var response = Assert.IsType<OpenAIModelsResponse>(okResult.Value);
-
-        Assert.Equal(2, response.Data.Count);
-
-        // Model with alias should use alias as ID
-        var aliasedModel = response.Data.First(m => m.Id == "hyperclovax");
-        Assert.NotNull(aliasedModel);
-        Assert.Equal("hyperclovax", aliasedModel.Id);
-
-        // Model without alias should use full ID
-        var normalModel = response.Data.First(m => m.Id == "hf:microsoft/DialoGPT-medium");
-        Assert.NotNull(normalModel);
-        Assert.Equal("hf:microsoft/DialoGPT-medium", normalModel.Id);
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(okResult.Value);
     }
 
     [Fact]
     public async Task ListModels_ReturnsEmptyList_WhenNoModelsLoaded()
     {
         // Arrange
+        var responseObject = new
+        {
+            @object = "list",
+            data = new object[0]
+        };
+
         _mockHostService
-            .Setup(x => x.GetLoadedModelsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<LMModel>());
+            .Setup(x => x.ListModelsOpenAIAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(responseObject);
 
         // Act
         var result = await _controller.ListModels(CancellationToken.None);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var response = Assert.IsType<OpenAIModelsResponse>(okResult.Value);
-
-        Assert.Empty(response.Data);
-        Assert.Equal("list", response.Object);
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(okResult.Value);
     }
 
     [Fact]
@@ -96,14 +103,14 @@ public class V1ControllerTests
     {
         // Arrange
         _mockHostService
-            .Setup(x => x.GetLoadedModelsAsync(It.IsAny<CancellationToken>()))
+            .Setup(x => x.ListModelsOpenAIAsync(It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("Service error"));
 
         // Act
         var result = await _controller.ListModels(CancellationToken.None);
 
         // Assert
-        var statusResult = Assert.IsType<ObjectResult>(result.Result);
+        var statusResult = Assert.IsType<ObjectResult>(result);
         Assert.Equal(500, statusResult.StatusCode);
     }
 

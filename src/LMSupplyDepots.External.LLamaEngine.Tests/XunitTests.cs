@@ -1,4 +1,5 @@
 using LLama.Common;
+using LMSupplyDepots.External.LLamaEngine.Extensions;
 using LMSupplyDepots.External.LLamaEngine.Models;
 using LMSupplyDepots.External.LLamaEngine.Services;
 using Microsoft.Extensions.DependencyInjection;

@@ -59,7 +59,8 @@ public partial class LMSupplyDepot
             throw new ArgumentException($"Model '{request.Model}' not found", nameof(request));
         }
 
-        if (!model.IsLoaded)
+        var isLoaded = await IsModelLoadedAsync(model.Id, cancellationToken);
+        if (!isLoaded)
         {
             throw new InvalidOperationException($"Model '{request.Model}' is not loaded");
         }
@@ -164,7 +165,8 @@ public partial class LMSupplyDepot
             throw new ArgumentException($"Model '{request.Model}' not found", nameof(request));
         }
 
-        if (!model.IsLoaded)
+        var isLoaded = await IsModelLoadedAsync(model.Id, cancellationToken);
+        if (!isLoaded)
         {
             throw new InvalidOperationException($"Model '{request.Model}' is not loaded");
         }
@@ -204,7 +206,8 @@ public partial class LMSupplyDepot
             throw new ArgumentException($"Model '{request.Model}' not found", nameof(request));
         }
 
-        if (!model.IsLoaded)
+        var isLoaded = await IsModelLoadedAsync(model.Id, cancellationToken);
+        if (!isLoaded)
         {
             throw new InvalidOperationException($"Model '{request.Model}' is not loaded");
         }

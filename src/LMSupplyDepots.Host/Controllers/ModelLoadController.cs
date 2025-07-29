@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using LMSupplyDepots.Models;
 using Microsoft.Extensions.Logging;
 using LMSupplyDepots.Contracts;
@@ -122,6 +122,42 @@ public class ModelLoadController : ControllerBase
         {
             _logger.LogError(ex, "Error retrieving loaded models");
             return StatusCode(500, new ErrorResponse { Error = $"Error retrieving loaded models: {ex.Message}" });
+        }
+    }
+
+    /// <summary>
+    /// Gets the runtime state of a model
+    /// </summary>
+    [HttpGet("{modelKey}/status")]
+    public async Task<ActionResult<ModelRuntimeState>> GetModelStatus(string modelKey, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var runtimeState = await _hostService.GetModelRuntimeStateAsync(modelKey, cancellationToken);
+            return Ok(runtimeState);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving status for model '{ModelKey}'", modelKey);
+            return StatusCode(500, new ErrorResponse { Error = $"Error retrieving model status: {ex.Message}" });
+        }
+    }
+
+    /// <summary>
+    /// Gets runtime states for all models
+    /// </summary>
+    [HttpGet("status")]
+    public ActionResult<IReadOnlyDictionary<string, ModelRuntimeState>> GetAllModelStatuses()
+    {
+        try
+        {
+            var allStates = _hostService.GetAllModelRuntimeStates();
+            return Ok(allStates);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving all model statuses");
+            return StatusCode(500, new ErrorResponse { Error = $"Error retrieving model statuses: {ex.Message}" });
         }
     }
 }

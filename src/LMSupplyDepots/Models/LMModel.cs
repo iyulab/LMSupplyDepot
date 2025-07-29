@@ -79,41 +79,4 @@ public class LMModel
     /// Collection of file paths for multi-file models
     /// </summary>
     public List<string> FilePaths { get; set; } = new();
-
-    /// <summary>
-    /// Determines if the model is available locally
-    /// </summary>
-    public bool IsLocal => !string.IsNullOrEmpty(LocalPath) &&
-                          (Directory.Exists(LocalPath) || File.Exists(LocalPath));
-
-    /// <summary>
-    /// Indicates whether the model is currently loaded in memory
-    /// This property should not be persisted to storage as it represents runtime state
-    /// </summary>
-    [JsonIgnore]
-    public bool IsLoaded { get; set; } = false;
-
-    /// <summary>
-    /// Timestamp when the model was loaded into memory
-    /// </summary>
-    [JsonIgnore]
-    public DateTime? LoadedAt { get; set; }
-
-    /// <summary>
-    /// Sets the model as loaded with current timestamp
-    /// </summary>
-    public void SetLoaded()
-    {
-        IsLoaded = true;
-        LoadedAt = DateTime.UtcNow;
-    }
-
-    /// <summary>
-    /// Sets the model as unloaded and clears timestamp
-    /// </summary>
-    public void SetUnloaded()
-    {
-        IsLoaded = false;
-        LoadedAt = null;
-    }
 }

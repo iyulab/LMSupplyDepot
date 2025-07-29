@@ -4,6 +4,7 @@ using LMSupplyDepots.SDK.OpenAI.Models;
 using LMSupplyDepots.SDK.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
 
@@ -18,6 +19,7 @@ public class V1ControllerAdaptiveToolCallTests
     private readonly Mock<IToolExecutionService> _mockToolExecutionService;
     private readonly Mock<IModelMetadataService> _mockModelMetadataService;
     private readonly Mock<ILogger<V1Controller>> _mockLogger;
+    private readonly Mock<IServiceProvider> _mockServiceProvider;
     private readonly V1Controller _controller;
 
     public V1ControllerAdaptiveToolCallTests()
@@ -26,12 +28,18 @@ public class V1ControllerAdaptiveToolCallTests
         _mockToolExecutionService = new Mock<IToolExecutionService>();
         _mockModelMetadataService = new Mock<IModelMetadataService>();
         _mockLogger = new Mock<ILogger<V1Controller>>();
+        _mockServiceProvider = new Mock<IServiceProvider>();
+
+        // Setup service provider to return the model metadata service
+        _mockServiceProvider
+            .Setup(x => x.GetService(typeof(IModelMetadataService)))
+            .Returns(_mockModelMetadataService.Object);
 
         _controller = new V1Controller(
             _mockHostService.Object,
             _mockToolExecutionService.Object,
-            _mockModelMetadataService.Object,
-            _mockLogger.Object);
+            _mockLogger.Object,
+            _mockServiceProvider.Object);
     }
 
     [Fact]
@@ -195,8 +203,8 @@ public class V1ControllerAdaptiveToolCallTests
         var controllerWithoutMetadata = new V1Controller(
             _mockHostService.Object,
             _mockToolExecutionService.Object,
-            null, // No metadata service
-            _mockLogger.Object);
+            _mockLogger.Object,
+            _mockServiceProvider.Object);
 
         // Use reflection to access private method
         var method = typeof(V1Controller).GetMethod("ParseToolCallsFromContentAsync",

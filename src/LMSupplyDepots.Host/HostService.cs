@@ -4,6 +4,7 @@ using LMSupplyDepots.Inference;
 using LMSupplyDepots.Interfaces;
 using LMSupplyDepots.SDK;
 using LMSupplyDepots.SDK.OpenAI.Models;
+using LMSupplyDepots.Models;
 
 namespace LMSupplyDepots.Host;
 
@@ -174,6 +175,12 @@ internal class HostService : IHostService, IAsyncDisposable
         _logger.LogInformation("HostService.UnloadModelAsync called for model: {ModelId}", modelId);
         return _depot.UnloadModelAsync(modelId, cancellationToken);
     }
+
+    public Task<ModelRuntimeState> GetModelRuntimeStateAsync(string modelKey, CancellationToken cancellationToken = default)
+        => _depot.GetModelRuntimeStateAsync(modelKey, cancellationToken);
+
+    public IReadOnlyDictionary<string, ModelRuntimeState> GetAllModelRuntimeStates()
+        => _depot.GetAllModelRuntimeStates();
 
     #endregion
 

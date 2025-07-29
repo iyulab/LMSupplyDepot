@@ -152,18 +152,20 @@ public static class ServiceCollectionExtensions
     /// </summary>
     private static void ConfigureModelLoaderServices(IServiceCollection services)
     {
+        // Register ModelStateService first
+        services.TryAddSingleton<ModelStateService>();
 
         // Register model loader service
         services.TryAddSingleton<IModelLoader>(serviceProvider =>
         {
-
             var modelRepository = serviceProvider.GetRequiredService<IModelRepository>();
             var logger = serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<RepositoryModelLoaderService>>();
             var adapters = serviceProvider.GetServices<BaseModelAdapter>();
+            var modelStateService = serviceProvider.GetRequiredService<ModelStateService>();
 
             var adapterList = adapters.ToList();
 
-            var service = new RepositoryModelLoaderService(modelRepository, logger, adapterList);
+            var service = new RepositoryModelLoaderService(modelRepository, logger, adapterList, modelStateService);
 
             // Initialize the service to reset all model states to unloaded
             // This ensures that after service restart, models aren't incorrectly marked as loaded
@@ -178,7 +180,6 @@ public static class ServiceCollectionExtensions
 
             return service;
         });
-
     }
 
     /// <summary>

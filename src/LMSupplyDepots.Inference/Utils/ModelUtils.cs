@@ -1,4 +1,4 @@
-﻿namespace LMSupplyDepots.Inference.Utils;
+namespace LMSupplyDepots.Inference.Utils;
 
 /// <summary>
 /// Utility methods for working with models
@@ -27,8 +27,13 @@ public static class ModelUtils
             return false;
         }
 
-        // Check if model is available locally
-        if (!model.IsLocal)
+        // Check if model path exists
+        if (string.IsNullOrEmpty(model.LocalPath))
+        {
+            return false;
+        }
+
+        if (!Directory.Exists(model.LocalPath) && !File.Exists(model.LocalPath))
         {
             return false;
         }
@@ -52,8 +57,13 @@ public static class ModelUtils
             return false;
         }
 
-        // Check if model is available locally
-        if (!model.IsLocal)
+        // Check if model path exists
+        if (string.IsNullOrEmpty(model.LocalPath))
+        {
+            return false;
+        }
+
+        if (!Directory.Exists(model.LocalPath) && !File.Exists(model.LocalPath))
         {
             return false;
         }

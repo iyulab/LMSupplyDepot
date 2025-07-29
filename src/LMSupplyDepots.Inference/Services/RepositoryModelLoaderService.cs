@@ -1,26 +1,32 @@
 using LMSupplyDepots.Inference.Adapters;
+using LMSupplyDepots.Models;
+using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 
 namespace LMSupplyDepots.Inference.Services;
 
 /// <summary>
-/// Model loader service that manages models through repository and maintains load state
+/// Model loader service that manages models through repository without persisting load state
 /// </summary>
 public class RepositoryModelLoaderService : IModelLoader, IDisposable
 {
     private readonly IModelRepository _repository;
     private readonly ILogger<RepositoryModelLoaderService> _logger;
     private readonly IEnumerable<BaseModelAdapter> _adapters;
+    private readonly ModelStateService _modelStateService;
     private readonly ConcurrentDictionary<string, LMModel> _loadedModels = new();
     private bool _disposed;
 
     public RepositoryModelLoaderService(
         IModelRepository repository,
         ILogger<RepositoryModelLoaderService> logger,
-        IEnumerable<BaseModelAdapter> adapters)
+        IEnumerable<BaseModelAdapter> adapters,
+        ModelStateService modelStateService)
     {
         _repository = repository;
         _logger = logger;
         _adapters = adapters;
+        _modelStateService = modelStateService;
 
         // Log available adapters for debugging
         var adapterList = adapters.ToList();
@@ -30,7 +36,7 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
     }
 
     /// <summary>
-    /// Loads a model into memory and updates its load state
+    /// Loads a model into memory
     /// </summary>
     public async Task<LMModel> LoadModelAsync(
         string modelId,
@@ -53,6 +59,9 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
                 return existingModel;
             }
 
+            // Update status to loading
+            _modelStateService.UpdateModelStatus(model.Id, ModelStatus.Loading);
+
             // Validate model can be loaded
             ValidateModelForLoading(model);
 
@@ -63,12 +72,14 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
             var adapter = FindAdapter(model);
             if (adapter == null)
             {
+                var errorMessage = $"No adapter found for model with format '{model.Format}' and type '{model.Type}'";
+                _modelStateService.UpdateModelStatus(model.Id, ModelStatus.Failed, errorMessage);
+
                 _logger.LogError("No adapter found for model {ModelId} with format '{Format}' and type '{Type}'. Available adapters: {AdapterNames}",
                     model.Id, model.Format, model.Type,
                     string.Join(", ", _adapters.Select(a => $"{a.AdapterName}({string.Join(",", a.SupportedFormats)})")));
 
-                throw new ModelLoadException(model.Id,
-                    $"No adapter found for model with format '{model.Format}' and type '{model.Type}'");
+                throw new ModelLoadException(model.Id, errorMessage);
             }
 
             // Load the model using the adapter
@@ -82,33 +93,31 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
 
             if (!success)
             {
-                throw new ModelLoadException(model.Id, "Failed to load model using adapter");
+                var errorMessage = "Failed to load model using adapter";
+                _modelStateService.UpdateModelStatus(model.Id, ModelStatus.Failed, errorMessage);
+                throw new ModelLoadException(model.Id, errorMessage);
             }
 
-            // Mark as loaded and update timestamps
-            model.SetLoaded();
+            // Update status to loaded
+            _modelStateService.UpdateModelStatus(model.Id, ModelStatus.Loaded, adapterName: adapter.AdapterName);
 
             // Always use the actual model ID as the cache key for consistency
             _loadedModels[model.Id] = model;
 
-            // Update repository with new load state
-            await _repository.SaveModelAsync(model, cancellationToken);
-
-            _logger.LogInformation("Model {ModelId} loaded successfully at {LoadedAt}",
-                model.Id, model.LoadedAt);
+            _logger.LogInformation("Model {ModelId} loaded successfully", model.Id);
 
             return model;
         }
         catch (Exception ex) when (!(ex is ModelLoadException))
         {
+            _modelStateService.UpdateModelStatus(modelId, ModelStatus.Failed, ex.Message);
             _logger.LogError(ex, "Failed to load model {ModelId}", modelId);
             throw new ModelLoadException(modelId, "Error loading model", ex);
         }
     }
 
     /// <summary>
-    /// Unloads a model from memory and updates its load state
-    /// Always resolves to actual model ID for consistent cache management
+    /// Unloads a model from memory
     /// </summary>
     public async Task UnloadModelAsync(
         string modelId,
@@ -123,6 +132,9 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
                 _logger.LogWarning("Model {ModelId} not found for unloading", modelId);
                 return;
             }
+
+            // Update status to unloading
+            _modelStateService.UpdateModelStatus(model.Id, ModelStatus.Unloading);
 
             // Always use the actual model ID for cache operations
             if (_loadedModels.TryRemove(model.Id, out var cachedModel))
@@ -142,21 +154,14 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
                     }
                 }
 
-                // Mark as unloaded
-                cachedModel.SetUnloaded();
-
-                // Update repository with new load state
-                await _repository.SaveModelAsync(cachedModel, cancellationToken);
-
                 _logger.LogInformation("Model {ModelId} unloaded successfully", model.Id);
             }
             else
             {
-                // Model wasn't in our cache, but check repository and update if needed
+                // Model wasn't in our cache, but try to unload using adapter anyway
                 var repoModel = await _repository.GetModelAsync(modelId, cancellationToken);
-                if (repoModel != null && repoModel.IsLoaded)
+                if (repoModel != null)
                 {
-                    // Try to unload using adapter even if not in cache
                     var adapter = FindAdapter(repoModel);
                     if (adapter != null)
                     {
@@ -166,14 +171,16 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
                         await adapter.UnloadModelAsync(modelId, cancellationToken);
                     }
 
-                    repoModel.SetUnloaded();
-                    await _repository.SaveModelAsync(repoModel, cancellationToken);
-                    _logger.LogInformation("Model {ModelId} load state updated to unloaded", modelId);
+                    _logger.LogInformation("Model {ModelId} unload attempted", modelId);
                 }
             }
+
+            // Update status to unloaded
+            _modelStateService.UpdateModelStatus(model.Id, ModelStatus.Unloaded);
         }
         catch (Exception ex)
         {
+            _modelStateService.UpdateModelStatus(modelId, ModelStatus.Failed, ex.Message);
             _logger.LogError(ex, "Failed to unload model {ModelId}", modelId);
             throw;
         }
@@ -181,7 +188,6 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
 
     /// <summary>
     /// Checks if a model is currently loaded
-    /// Always resolves to actual model ID for consistent cache lookup
     /// </summary>
     public async Task<bool> IsModelLoadedAsync(
         string modelId,
@@ -194,8 +200,8 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
             return false;
         }
 
-        // Always check cache using the actual model ID
-        return _loadedModels.ContainsKey(model.Id);
+        // Check both our cache and the state service
+        return _loadedModels.ContainsKey(model.Id) && _modelStateService.IsModelLoaded(model.Id);
     }
 
     /// <summary>
@@ -208,11 +214,30 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
 
         foreach (var cachedModel in _loadedModels.Values)
         {
-            loadedModels.Add(cachedModel);
+            if (_modelStateService.IsModelLoaded(cachedModel.Id))
+            {
+                loadedModels.Add(cachedModel);
+            }
         }
 
         _logger.LogInformation("Retrieved {Count} loaded models from cache", loadedModels.Count);
         return await Task.FromResult(loadedModels.AsReadOnly());
+    }
+
+    /// <summary>
+    /// Gets the runtime state of a model
+    /// </summary>
+    public ModelRuntimeState GetModelRuntimeState(string modelId)
+    {
+        return _modelStateService.GetModelState(modelId);
+    }
+
+    /// <summary>
+    /// Gets runtime states for all models
+    /// </summary>
+    public IReadOnlyDictionary<string, ModelRuntimeState> GetAllModelRuntimeStates()
+    {
+        return _modelStateService.GetAllModelStates();
     }
 
     /// <summary>
@@ -232,26 +257,18 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
     }
 
     /// <summary>
-    /// Initializes the service by synchronizing load states
+    /// Initializes the service
     /// </summary>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            _logger.LogInformation("Initializing RepositoryModelLoaderService and synchronizing load states");
+            _logger.LogInformation("Initializing RepositoryModelLoaderService");
 
-            // Get all models from repository
-            var allModels = await _repository.ListModelsAsync(
-                null, null, 0, int.MaxValue, cancellationToken);
+            // No need to update repository states since we don't persist load state anymore
+            // All models start as unloaded in memory state
 
-            // Mark all models as unloaded since we're starting fresh
-            foreach (var model in allModels.Where(m => m.IsLoaded))
-            {
-                model.SetUnloaded();
-                await _repository.SaveModelAsync(model, cancellationToken);
-            }
-
-            _logger.LogInformation("Load state synchronization completed. All models marked as unloaded.");
+            _logger.LogInformation("RepositoryModelLoaderService initialization completed");
         }
         catch (Exception ex)
         {
@@ -279,63 +296,13 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
     }
 
     /// <summary>
-    /// Updates the load state of a model in both cache and repository
-    /// </summary>
-    public async Task UpdateModelLoadStateAsync(string modelId, bool isLoaded, CancellationToken cancellationToken = default)
-    {
-        var model = await _repository.GetModelAsync(modelId, cancellationToken);
-        if (model == null)
-        {
-            _logger.LogWarning("Attempted to update load state for non-existent model {ModelId}", modelId);
-            return;
-        }
-
-        if (isLoaded)
-        {
-            model.SetLoaded();
-            _loadedModels[modelId] = model;
-        }
-        else
-        {
-            model.SetUnloaded();
-            _loadedModels.TryRemove(modelId, out _);
-        }
-
-        await _repository.SaveModelAsync(model, cancellationToken);
-
-        _logger.LogDebug("Updated load state for model {ModelId}: {IsLoaded}", modelId, isLoaded);
-    }
-
-    /// <summary>
     /// Disposes resources and cleans up
     /// </summary>
     public void Dispose()
     {
         if (!_disposed)
         {
-            // Mark all loaded models as unloaded
-            try
-            {
-                var updateTasks = _loadedModels.Values.Select(async model =>
-                {
-                    try
-                    {
-                        model.SetUnloaded();
-                        await _repository.SaveModelAsync(model, CancellationToken.None);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to update load state for model {ModelId} during disposal", model.Id);
-                    }
-                });
-
-                Task.WaitAll(updateTasks.ToArray(), TimeSpan.FromSeconds(5));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error during cleanup of loaded models");
-            }
-
+            // Clear in-memory state only
             _loadedModels.Clear();
             _disposed = true;
         }

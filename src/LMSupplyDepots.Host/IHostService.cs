@@ -1,4 +1,5 @@
 using LMSupplyDepots.External.HuggingFace.Models;
+using LMSupplyDepots.Models;
 
 namespace LMSupplyDepots.Host;
 
@@ -65,6 +66,16 @@ public interface IHostService
     Task<IReadOnlyList<LMModel>> GetLoadedModelsAsync(CancellationToken cancellationToken = default);
     Task<LMModel> LoadModelAsync(string modelId, Dictionary<string, object?>? parameters = null, CancellationToken cancellationToken = default);
     Task UnloadModelAsync(string modelId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the runtime state of a model
+    /// </summary>
+    Task<ModelRuntimeState> GetModelRuntimeStateAsync(string modelKey, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets runtime states for all models
+    /// </summary>
+    IReadOnlyDictionary<string, ModelRuntimeState> GetAllModelRuntimeStates();
 
     #endregion
 

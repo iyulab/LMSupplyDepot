@@ -134,7 +134,8 @@ public partial class HuggingFaceDownloader
         {
             // Check if model is completed in repository
             var existingModel = await _fileSystemRepository.GetModelAsync(sourceId, cancellationToken);
-            if (existingModel != null && existingModel.IsLocal)
+            if (existingModel != null && !string.IsNullOrEmpty(existingModel.LocalPath) && 
+                (Directory.Exists(existingModel.LocalPath) || File.Exists(existingModel.LocalPath)))
             {
                 return ModelDownloadStatus.Completed;
             }

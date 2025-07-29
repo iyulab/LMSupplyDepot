@@ -43,9 +43,21 @@ public class VectorStoreAPI
                 options.FileIds.Add(fileId);
             }
 
-            // Use async operation approach
-            var operation = await _vectorStoreClient.CreateVectorStoreAsync(options, waitUntilCompleted: false);
-            var vectorStore = operation.Value;
+            // Use the actual OpenAI SDK method signature
+            var operation = await _vectorStoreClient.CreateVectorStoreAsync(waitUntilCompleted: false, options);
+            
+            // The operation might return a different type, let's handle it properly
+            VectorStore vectorStore;
+            if (operation.HasCompleted)
+            {
+                vectorStore = operation.Value;
+            }
+            else
+            {
+                // Wait for completion if needed
+                await operation.WaitForCompletionAsync();
+                vectorStore = operation.Value;
+            }
 
             if (vectorStore != null)
             {

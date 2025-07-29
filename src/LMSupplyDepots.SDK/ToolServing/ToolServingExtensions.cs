@@ -200,7 +200,7 @@ public static class LMSupplyDepotToolServingExtensions
     /// <summary>
     /// Register tools automatically on startup
     /// </summary>
-    public static async Task<LMSupplyDepot> RegisterDefaultToolsAsync(this LMSupplyDepot supplyDepot)
+    public static Task<LMSupplyDepot> RegisterDefaultToolsAsync(this LMSupplyDepot supplyDepot)
     {
         // Get tool registry from service provider
         // In a real implementation, you'd access the actual service provider
@@ -215,7 +215,7 @@ public static class LMSupplyDepotToolServingExtensions
         //     Tags = new List<string> { "weather", "builtin" }
         // });
 
-        return supplyDepot;
+        return Task.FromResult(supplyDepot);
     }
 }
 

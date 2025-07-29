@@ -104,7 +104,7 @@ public partial class HuggingFaceDownloader
     /// <summary>
     /// Updates model with actual downloaded files
     /// </summary>
-    protected async Task UpdateModelWithActualFilesAsync(LMModel model, string targetDirectory, CancellationToken cancellationToken)
+    protected Task UpdateModelWithActualFilesAsync(LMModel model, string targetDirectory, CancellationToken cancellationToken)
     {
         var mainModelFile = FileSystemHelper.FindMainModelFile(targetDirectory);
         if (mainModelFile != null)
@@ -124,16 +124,18 @@ public partial class HuggingFaceDownloader
             var modelFiles = FileSystemHelper.GetModelFilesWithSizes(targetDirectory);
             if (modelFiles.Count > 0)
             {
-                model.FilePaths = modelFiles.Keys.Select(Path.GetFileName).ToList();
+                model.FilePaths = modelFiles.Keys.Select(Path.GetFileName).Where(name => !string.IsNullOrEmpty(name)).ToList()!;
                 model.SizeInBytes = modelFiles.Values.Sum();
             }
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
     /// Creates model metadata file
     /// </summary>
-    protected async Task CreateModelMetadataAsync(LMModel model, string targetDirectory, CancellationToken cancellationToken)
+    protected Task CreateModelMetadataAsync(LMModel model, string targetDirectory, CancellationToken cancellationToken)
     {
         var mainModelFile = FileSystemHelper.FindMainModelFile(targetDirectory);
         if (mainModelFile != null)
@@ -141,8 +143,9 @@ public partial class HuggingFaceDownloader
             var actualArtifactName = Path.GetFileNameWithoutExtension(mainModelFile);
             var metadataPath = Path.Combine(targetDirectory, $"{actualArtifactName}.json");
             var json = JsonHelper.Serialize(model);
-            await File.WriteAllTextAsync(metadataPath, json, cancellationToken);
+            return File.WriteAllTextAsync(metadataPath, json, cancellationToken);
         }
+        return Task.CompletedTask;
     }
 
     /// <summary>

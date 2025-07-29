@@ -375,7 +375,7 @@ public static class HuggingFaceHelper
     /// <summary>
     /// Extracts artifacts from a HuggingFace model with actual file sizes for detailed info
     /// </summary>
-    public static async Task<List<ModelArtifact>> ExtractDetailedArtifactsFromModelAsync(
+    public static Task<List<ModelArtifact>> ExtractDetailedArtifactsFromModelAsync(
         HuggingFaceModel hfModel,
         Dictionary<string, long>? repositoryFileSizes,
         ILogger? logger = null,
@@ -386,7 +386,7 @@ public static class HuggingFaceHelper
         if (hfModel.Siblings == null || hfModel.Siblings.Count == 0)
         {
             logger?.LogWarning("No siblings found for model {ModelId}", hfModel.ModelId);
-            return artifacts;
+            return Task.FromResult(artifacts);
         }
 
         // Get all model files from siblings
@@ -397,7 +397,7 @@ public static class HuggingFaceHelper
         if (modelFiles.Count == 0)
         {
             logger?.LogWarning("No model files found in siblings for {ModelId}", hfModel.ModelId);
-            return artifacts;
+            return Task.FromResult(artifacts);
         }
 
         logger?.LogDebug("Found {Count} model files for {ModelId}", modelFiles.Count, hfModel.ModelId);
@@ -446,13 +446,13 @@ public static class HuggingFaceHelper
                 artifactName, files.Count, totalSize);
         }
 
-        return artifacts.OrderBy(a => a.Name).ToList();
+        return Task.FromResult(artifacts.OrderBy(a => a.Name).ToList());
     }
 
     /// <summary>
     /// Extracts artifact information from repository files with actual sizes
     /// </summary>
-    public static async Task<List<ModelArtifact>> ExtractArtifactsAsync(
+    public static Task<List<ModelArtifact>> ExtractArtifactsAsync(
         List<string> files,
         string defaultFormat,
         Dictionary<string, long>? actualFileSizes = null)
@@ -528,7 +528,7 @@ public static class HuggingFaceHelper
             }
         }
 
-        return artifacts;
+        return Task.FromResult(artifacts);
     }
 
     /// <summary>

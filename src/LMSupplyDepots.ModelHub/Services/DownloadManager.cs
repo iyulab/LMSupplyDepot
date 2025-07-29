@@ -155,7 +155,7 @@ public sealed class DownloadManager : IDisposable
     /// <summary>
     /// Gets all downloads
     /// </summary>
-    public async Task<IEnumerable<DownloadInfo>> GetAllDownloadsAsync(CancellationToken cancellationToken = default)
+    public Task<IEnumerable<DownloadInfo>> GetAllDownloadsAsync(CancellationToken cancellationToken = default)
     {
         var downloads = new List<DownloadInfo>();
 
@@ -187,7 +187,7 @@ public sealed class DownloadManager : IDisposable
             }
         }
 
-        return downloads;
+        return Task.FromResult<IEnumerable<DownloadInfo>>(downloads);
     }
 
     private IModelDownloader GetDownloader(string sourceId)

@@ -33,6 +33,10 @@ public class DebugController : ControllerBase
             var modelLoader = _serviceProvider.GetService<IModelLoader>();
             var modelLoaderType = modelLoader?.GetType();
 
+            // Check RepositoryModelLoaderService registration  
+            var repositoryModelLoader = _serviceProvider.GetService<LMSupplyDepots.Inference.Services.RepositoryModelLoaderService>();
+            var repositoryModelLoaderType = repositoryModelLoader?.GetType();
+
             // Check BaseModelAdapter registrations
             var adapters = _serviceProvider.GetServices<BaseModelAdapter>().ToList();
 
@@ -48,6 +52,12 @@ public class DebugController : ControllerBase
                     Type = modelLoaderType?.FullName,
                     Assembly = modelLoaderType?.Assembly.GetName().Name,
                     IsNull = modelLoader == null
+                },
+                RepositoryModelLoader = new
+                {
+                    Type = repositoryModelLoaderType?.FullName,
+                    Assembly = repositoryModelLoaderType?.Assembly.GetName().Name,
+                    IsNull = repositoryModelLoader == null
                 },
                 Adapters = adapters.Select(a => new
                 {

@@ -11,6 +11,18 @@
 ### Get All Models
 GET {{baseUrl}}/api/models
 
+### Get Models Status
+GET {{baseUrl}}/api/models/status
+
+#### Status: Loading
+{"hf:bartowski/microsoft_Phi-4-mini-instruct-GGUF/microsoft_Phi-4-mini-instruct-Q8_0":{"modelId":"hf:bartowski/microsoft_Phi-4-mini-instruct-GGUF/microsoft_Phi-4-mini-instruct-Q8_0","status":"Loading","lastStatusChange":"2025-07-29T01:42:22.4551798Z","metadata":{},"isAvailable":false}}
+
+#### Status: Unloaded
+{"hf:bartowski/microsoft_Phi-4-mini-instruct-GGUF/microsoft_Phi-4-mini-instruct-Q8_0":{"modelId":"hf:bartowski/microsoft_Phi-4-mini-instruct-GGUF/microsoft_Phi-4-mini-instruct-Q8_0","status":"Unloaded","lastStatusChange":"2025-07-29T01:40:40.4120149Z","metadata":{},"isAvailable":false}}
+
+#### Status: Loaded
+{"hf:bartowski/microsoft_Phi-4-mini-instruct-GGUF/microsoft_Phi-4-mini-instruct-Q8_0":{"modelId":"hf:bartowski/microsoft_Phi-4-mini-instruct-GGUF/microsoft_Phi-4-mini-instruct-Q8_0","status":"Loaded","loadedAt":"2025-07-29T01:41:14.1715231Z","lastStatusChange":"2025-07-29T01:41:14.1715249Z","adapterName":"LLama","metadata":{},"isAvailable":true}}
+
 ### Load model for testing
 POST {{baseUrl}}/api/models/load
 Content-Type: application/json
@@ -24,7 +36,7 @@ POST {{baseUrl}}/api/models/unload
 Content-Type: application/json
 
 {
-  "model": "{{model}}"
+  "model": "{{alias}}"
 }
 
 

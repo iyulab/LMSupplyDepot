@@ -155,8 +155,8 @@ public static class ServiceCollectionExtensions
         // Register ModelStateService first
         services.TryAddSingleton<ModelStateService>();
 
-        // Register model loader service
-        services.TryAddSingleton<IModelLoader>(serviceProvider =>
+        // Register model loader service as both concrete type and interface
+        services.TryAddSingleton<RepositoryModelLoaderService>(serviceProvider =>
         {
             var modelRepository = serviceProvider.GetRequiredService<IModelRepository>();
             var logger = serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<RepositoryModelLoaderService>>();
@@ -180,6 +180,10 @@ public static class ServiceCollectionExtensions
 
             return service;
         });
+
+        // Register the interface implementation using the concrete type
+        services.TryAddSingleton<IModelLoader>(serviceProvider =>
+            serviceProvider.GetRequiredService<RepositoryModelLoaderService>());
     }
 
     /// <summary>

@@ -180,7 +180,7 @@ public partial class LMSupplyDepot
             {
                 // Add more context to the exception with potential fixes
                 string additionalInfo = GetModelLoadErrorDetails(ex, modelId);
-                throw new ModelLoadException(modelId, $"{ex.Message}. {additionalInfo}", ex.InnerException);
+                throw new ModelLoadException(modelId, $"{ex.Message}. {additionalInfo}", ex.InnerException ?? ex);
             }
         }
 
@@ -277,7 +277,7 @@ public partial class LMSupplyDepot
             {
                 // Add more context to the exception with potential fixes
                 string additionalInfo = GetModelLoadErrorDetails(ex, modelId);
-                throw new ModelLoadException(modelId, $"{ex.Message}. {additionalInfo}", ex.InnerException);
+                throw new ModelLoadException(modelId, $"{ex.Message}. {additionalInfo}", ex.InnerException ?? ex);
             }
         }
 

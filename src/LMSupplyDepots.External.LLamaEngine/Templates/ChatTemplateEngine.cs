@@ -115,7 +115,7 @@ public class ChatTemplateEngine : IChatTemplateEngine
 
     private void InitializeDefaultTemplates()
     {
-        // Llama-3 style template
+        // Llama-3 style template with improved stop token handling
         _templates["llama3"] = @"{{bos_token}}{% for message in messages %}<|start_header_id|>{{ message.role }}<|end_header_id|>
 
 {{ message.content }}<|eot_id|>

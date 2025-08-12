@@ -493,9 +493,41 @@ public class ModelConfigurationService : IModelConfigurationService
         return new SystemInfo
         {
             CpuCores = Environment.ProcessorCount,
-            AvailableMemoryGB = 16, // TODO: Get actual memory info
-            HasGpu = true // TODO: Detect GPU presence
+            AvailableMemoryGB = GetAvailableMemoryGB(),
+            HasGpu = DetectGpuPresence()
         };
+    }
+
+    private static int GetAvailableMemoryGB()
+    {
+        try
+        {
+            // Get total physical memory in bytes and convert to GB
+            var memoryInfo = GC.GetGCMemoryInfo();
+            var totalMemoryBytes = memoryInfo.TotalAvailableMemoryBytes;
+            return (int)(totalMemoryBytes / (1024L * 1024 * 1024));
+        }
+        catch
+        {
+            // Fallback to reasonable default if detection fails
+            return 16;
+        }
+    }
+
+    private static bool DetectGpuPresence()
+    {
+        try
+        {
+            // Check for CUDA environment variable as a simple GPU detection
+            var cudaPath = Environment.GetEnvironmentVariable("CUDA_PATH");
+            var cudaHome = Environment.GetEnvironmentVariable("CUDA_HOME");
+            return !string.IsNullOrEmpty(cudaPath) || !string.IsNullOrEmpty(cudaHome);
+        }
+        catch
+        {
+            // Fallback to false if detection fails
+            return false;
+        }
     }
 
     #endregion

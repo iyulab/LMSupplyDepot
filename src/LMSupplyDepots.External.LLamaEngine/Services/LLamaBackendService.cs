@@ -1,5 +1,6 @@
 ﻿using LLama.Common;
 using LMSupplyDepots.External.LLamaEngine.Models;
+using LMSupplyDepots.External.LLamaEngine.Logging;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
@@ -15,7 +16,7 @@ public interface ILLamaBackendService
 
 public class LLamaBackendService(ILogger<LLamaBackendService> logger) : ILLamaBackendService
 {
-    private readonly ILogger<LLamaBackendService> _logger = logger;
+    private readonly ILogger<LLamaBackendService> _logger = new SafeLogger<LLamaBackendService>(logger);
     private readonly ConcurrentDictionary<string, ModelParams> _modelParams = new();
     private int? _gpuLayers;
     private bool _initialized;
@@ -136,8 +137,8 @@ public class LLamaBackendService(ILogger<LLamaBackendService> logger) : ILLamaBa
             if (IsCudaAvailable) backendInfo.Add("CUDA");
             if (IsVulkanAvailable) backendInfo.Add("Vulkan");
 
-            _logger.LogInformation("Detected hardware acceleration: {Backends}",
-                backendInfo.Count > 0 ? string.Join(", ", backendInfo) : "None");
+            var backendMessage = backendInfo.Count > 0 ? string.Join(", ", backendInfo) : "None";
+            _logger.LogInformation("Detected hardware acceleration: {Backends}", backendMessage);
 
             // Try to initialize backends in order of preference
             if (IsCudaAvailable && TryInitializeCuda())

@@ -12,11 +12,24 @@ public static class ParameterFactory
         float topP = 0.9f,
         float repeatPenalty = 1.1f)
     {
+        // Default LLaMA-3.2 compatible stop sequences if none provided
+        var defaultAntiPrompts = new List<string>
+        {
+            "<|eot_id|>",
+            "<|start_header_id|>user<|end_header_id|>",
+            "<|start_header_id|>system<|end_header_id|>",
+            "\nuser:",
+            "\nassistant:",
+            "\nsystem:"
+        };
+
+        var finalAntiPrompts = antiprompt != null ? [.. antiprompt] : defaultAntiPrompts;
+
         // Set inference parameters
         return new InferenceParams
         {
             MaxTokens = maxTokens,
-            AntiPrompts = antiprompt != null ? [.. antiprompt] : [], // Empty by default
+            AntiPrompts = finalAntiPrompts,
             SamplingPipeline = new DefaultSamplingPipeline
             {
                 Temperature = temperature,

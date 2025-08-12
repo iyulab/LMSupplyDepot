@@ -45,6 +45,7 @@ public class ModelMetadata
     public int ContextLength { get; set; }
     public int VocabularySize { get; set; }
     public int EmbeddingLength { get; set; }
+    public List<string> StopTokens { get; set; } = new();
     public Dictionary<string, string> RawMetadata { get; set; } = new();
 }
 
@@ -55,6 +56,7 @@ public class ToolCapabilities
 {
     public bool SupportsToolCalling { get; set; }
     public string ToolCallFormat { get; set; } = string.Empty;
+    public string ToolCallSyntax { get; set; } = string.Empty;
     public Dictionary<string, string> ToolTokens { get; set; } = new();
     public string StartToken { get; set; } = string.Empty;
     public string EndToken { get; set; } = string.Empty;

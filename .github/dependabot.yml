@@ -1,0 +1,96 @@
+# Dependabot configuration for LMSupplyDepots
+# Automated dependency updates with security focus
+
+version: 2
+updates:
+  # .NET NuGet packages
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    # Use centralized package management
+    versioning-strategy: "increase"
+    # Open pull requests for security updates immediately
+    open-pull-requests-limit: 10
+    # Reviewers and assignees
+    reviewers:
+      - "achunja"  # Replace with actual maintainer username
+    labels:
+      - "dependencies"
+      - "nuget"
+      - "automated"
+    # Group compatible updates to reduce noise
+    groups:
+      microsoft-extensions:
+        patterns:
+          - "Microsoft.Extensions.*"
+        update-types:
+          - "minor"
+          - "patch"
+      testing-frameworks:
+        patterns:
+          - "xunit*"
+          - "Moq"
+          - "FluentAssertions"
+          - "Microsoft.NET.Test.Sdk"
+        update-types:
+          - "minor"
+          - "patch"
+      ai-ml-libraries:
+        patterns:
+          - "OpenAI"
+          - "LLamaSharp*"
+        update-types:
+          - "patch"  # Only patch updates for AI libraries
+    # Dependency types to monitor
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"  # Monitor transitive dependencies too
+    # Auto-merge configuration for security patches
+    commit-message:
+      prefix: "build(deps)"
+      include: "scope"
+
+  # GitHub Actions updates
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    reviewers:
+      - "achunja"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "automated"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+  # Docker updates (if Docker files exist)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    reviewers:
+      - "achunja"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "automated"
+    # Only security and patch updates for Docker base images
+    allow:
+      - dependency-type: "direct"
+
+# Global configuration
+registries:
+  nuget-org:
+    type: nuget-feed
+    url: https://api.nuget.org/v3/index.json

@@ -44,20 +44,8 @@ public class VectorStoreAPI
             }
 
             // Use the actual OpenAI SDK method signature
-            var operation = await _vectorStoreClient.CreateVectorStoreAsync(waitUntilCompleted: false, options);
-            
-            // The operation might return a different type, let's handle it properly
-            VectorStore vectorStore;
-            if (operation.HasCompleted)
-            {
-                vectorStore = operation.Value;
-            }
-            else
-            {
-                // Wait for completion if needed
-                await operation.WaitForCompletionAsync();
-                vectorStore = operation.Value;
-            }
+            var result = await _vectorStoreClient.CreateVectorStoreAsync(options);
+            var vectorStore = result.Value;
 
             if (vectorStore != null)
             {
@@ -185,20 +173,16 @@ public class VectorStoreAPI
     }
 
     /// <summary>
-    /// Adds a file to an existing vector store - simplified implementation
+    /// Adds a file to an existing vector store
     /// </summary>
-    public async Task<VectorStoreFileAssociation> AddFileToVectorStoreAsync(string vectorStoreId, string fileId)
+    public async Task<VectorStoreFile> AddFileToVectorStoreAsync(string vectorStoreId, string fileId)
     {
         Debug.WriteLine($"Adding file {fileId} to vector store {vectorStoreId}");
 
         try
         {
-            // For now, return a placeholder implementation
-            // This would need to use the actual API when the correct signature is known
-            await Task.Delay(100); // Simulate async operation
-            
-            // Create a mock result for now
-            throw new NotImplementedException("AddFileToVectorStore API needs proper implementation with correct method signature");
+            var result = await _vectorStoreClient.CreateFileAsync(vectorStoreId, fileId);
+            return result.Value;
         }
         catch (Exception ex)
         {
@@ -216,16 +200,15 @@ public class VectorStoreAPI
 
         try
         {
-            // Use the RemoveFileFromStore method
-            var result = await _vectorStoreClient.RemoveFileFromStoreAsync(vectorStoreId, fileId);
+            var result = await _vectorStoreClient.DeleteFileAsync(vectorStoreId, fileId);
             if (result?.Value == null)
             {
                 Debug.WriteLine($"Remove operation for file {fileId} from vector store {vectorStoreId} returned null result");
                 return false;
             }
 
-            Debug.WriteLine($"File {fileId} removed from vector store {vectorStoreId}: {result.Value.Removed}");
-            return result.Value.Removed;
+            Debug.WriteLine($"File {fileId} removed from vector store {vectorStoreId}: {result.Value.Deleted}");
+            return result.Value.Deleted;
         }
         catch (Exception ex)
         {
@@ -237,12 +220,12 @@ public class VectorStoreAPI
     /// <summary>
     /// Lists all files in a vector store
     /// </summary>
-    public List<VectorStoreFileAssociation> ListVectorStoreFiles(string vectorStoreId, int? limit = null, string? status = null)
+    public List<VectorStoreFile> ListVectorStoreFiles(string vectorStoreId, int? limit = null, string? status = null)
     {
         try
         {
             // Use simple call
-            var filesCollection = _vectorStoreClient.GetFileAssociations(vectorStoreId);
+            var filesCollection = _vectorStoreClient.GetVectorStoreFiles(vectorStoreId);
 
             if (filesCollection == null)
             {
@@ -251,7 +234,7 @@ public class VectorStoreAPI
 
             // Convert collection to list and apply filtering
             var filesList = filesCollection.ToList();
-            
+
             if (limit.HasValue)
             {
                 filesList = filesList.Take(limit.Value).ToList();
@@ -267,23 +250,25 @@ public class VectorStoreAPI
     }
 
     /// <summary>
-    /// Adds multiple files to a vector store as a batch - simplified implementation
+    /// Adds multiple files to a vector store individually
     /// </summary>
-    public async Task<VectorStoreBatchFileJob> AddFilesToVectorStoreAsync(string vectorStoreId, IEnumerable<string> fileIds)
+    public async Task<List<VectorStoreFile>> AddFilesToVectorStoreAsync(string vectorStoreId, IEnumerable<string> fileIds)
     {
-        Debug.WriteLine($"Adding {fileIds.Count()} files to vector store {vectorStoreId} as a batch");
+        Debug.WriteLine($"Adding {fileIds.Count()} files to vector store {vectorStoreId}");
 
         try
         {
-            // For now, return a placeholder implementation
-            // This would need to use the actual API when the correct signature is known
-            await Task.Delay(100); // Simulate async operation
-            
-            throw new NotImplementedException("CreateBatchFileJob API needs proper implementation with correct method signature");
+            var results = new List<VectorStoreFile>();
+            foreach (var fileId in fileIds)
+            {
+                var result = await AddFileToVectorStoreAsync(vectorStoreId, fileId);
+                results.Add(result);
+            }
+            return results;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error adding files to vector store as batch: {ex.Message}");
+            Debug.WriteLine($"Error adding files to vector store: {ex.Message}");
             throw;
         }
     }

@@ -11,6 +11,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Force secure version to override vulnerable transitive dependency -->
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Remove="appsettings.Development.json" Condition="'$(Configuration)' != 'Debug'" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,78 @@
+# LMSupplyDepots HostApp - Production Dockerfile
+# Multi-stage build for optimized production deployment
+
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS build-env
+WORKDIR /app
+
+# Copy solution file and project references for dependency resolution
+COPY ["src/LMSupplyDepots.sln", "./src/"]
+COPY ["Directory.Packages.props", "./"]
+COPY ["Directory.Build.props", "./"]
+
+# Copy project files for restore
+COPY ["src/LMSupplyDepots.HostApp/*.csproj", "./src/LMSupplyDepots.HostApp/"]
+COPY ["src/LMSupplyDepots.Host/*.csproj", "./src/LMSupplyDepots.Host/"]
+COPY ["src/LMSupplyDepots.SDK/*.csproj", "./src/LMSupplyDepots.SDK/"]
+COPY ["src/LMSupplyDepots.Inference/*.csproj", "./src/LMSupplyDepots.Inference/"]
+COPY ["src/LMSupplyDepots/*.csproj", "./src/LMSupplyDepots/"]
+COPY ["src/LMSupplyDepots.ModelHub/*.csproj", "./src/LMSupplyDepots.ModelHub/"]
+COPY ["src/LMSupplyDepots.External.OpenAI/*.csproj", "./src/LMSupplyDepots.External.OpenAI/"]
+COPY ["src/LMSupplyDepots.External.LLamaEngine/*.csproj", "./src/LMSupplyDepots.External.LLamaEngine/"]
+COPY ["src/LMSupplyDepots.External.HuggingFace/*.csproj", "./src/LMSupplyDepots.External.HuggingFace/"]
+
+# Restore dependencies
+RUN dotnet restore "./src/LMSupplyDepots.HostApp/LMSupplyDepots.HostApp.csproj"
+
+# Copy source code
+COPY ["src/", "./src/"]
+
+# Build and publish
+WORKDIR /app/src/LMSupplyDepots.HostApp
+RUN dotnet publish -c Release -o /app/out --no-restore \
+    --runtime linux-x64 --self-contained false
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS runtime
+
+# Install required packages for AI/ML operations
+RUN apk add --no-cache \
+    icu-libs \
+    tzdata \
+    ca-certificates \
+    && rm -rf /var/cache/apk/*
+
+# Set environment variables
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+ENV LC_ALL=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S appuser && \
+    adduser -S appuser -G appuser -u 1001
+
+# Create application directory
+WORKDIR /app
+
+# Copy published application
+COPY --from=build-env /app/out .
+
+# Create directories and set permissions
+RUN mkdir -p /app/models /app/logs /app/data && \
+    chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Expose port
+EXPOSE 8080
+
+# Configure Kestrel to listen on all interfaces
+ENV ASPNETCORE_URLS=http://+:8080
+
+ENTRYPOINT ["dotnet", "LMSupplyDepots.HostApp.dll"]

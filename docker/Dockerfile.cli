@@ -1,0 +1,72 @@
+# LMSupplyDepots CLI - Container for command-line tool
+# Multi-stage build for optimized CLI deployment
+
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS build-env
+WORKDIR /app
+
+# Copy solution file and dependency management
+COPY ["src/LMSupplyDepots.sln", "./src/"]
+COPY ["Directory.Packages.props", "./"]
+COPY ["Directory.Build.props", "./"]
+
+# Copy project files for restore
+COPY ["src/LMSupplyDepots.CLI/*.csproj", "./src/LMSupplyDepots.CLI/"]
+COPY ["src/LMSupplyDepots.SDK/*.csproj", "./src/LMSupplyDepots.SDK/"]
+COPY ["src/LMSupplyDepots.Inference/*.csproj", "./src/LMSupplyDepots.Inference/"]
+COPY ["src/LMSupplyDepots/*.csproj", "./src/LMSupplyDepots/"]
+COPY ["src/LMSupplyDepots.ModelHub/*.csproj", "./src/LMSupplyDepots.ModelHub/"]
+COPY ["src/LMSupplyDepots.External.OpenAI/*.csproj", "./src/LMSupplyDepots.External.OpenAI/"]
+COPY ["src/LMSupplyDepots.External.LLamaEngine/*.csproj", "./src/LMSupplyDepots.External.LLamaEngine/"]
+COPY ["src/LMSupplyDepots.External.HuggingFace/*.csproj", "./src/LMSupplyDepots.External.HuggingFace/"]
+
+# Restore dependencies
+RUN dotnet restore "./src/LMSupplyDepots.CLI/LMSupplyDepots.CLI.csproj"
+
+# Copy source code
+COPY ["src/", "./src/"]
+
+# Build and publish as single-file executable
+WORKDIR /app/src/LMSupplyDepots.CLI
+RUN dotnet publish -c Release -o /app/out \
+    --runtime linux-x64 --self-contained true \
+    /p:PublishSingleFile=true \
+    /p:EnableCompressionInSingleFile=true \
+    /p:DebugType=None \
+    /p:DebugSymbols=false
+
+# Runtime stage - minimal alpine for small size
+FROM alpine:latest AS runtime
+
+# Install required runtime libraries
+RUN apk add --no-cache \
+    libgcc libstdc++ \
+    icu-libs \
+    ca-certificates \
+    && rm -rf /var/cache/apk/*
+
+# Set environment variables
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+ENV LC_ALL=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+
+# Create non-root user
+RUN addgroup -g 1001 -S appuser && \
+    adduser -S appuser -G appuser -u 1001
+
+# Create application directory
+WORKDIR /app
+
+# Copy published executable
+COPY --from=build-env /app/out/lmd .
+
+# Create directories and set permissions
+RUN mkdir -p /app/models /app/logs /app/data && \
+    chown -R appuser:appuser /app && \
+    chmod +x /app/lmd
+
+# Switch to non-root user
+USER appuser
+
+# Set entrypoint
+ENTRYPOINT ["/app/lmd"]

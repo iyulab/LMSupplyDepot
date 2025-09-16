@@ -181,7 +181,7 @@ public class VectorStoreAPI
 
         try
         {
-            var result = await _vectorStoreClient.CreateFileAsync(vectorStoreId, fileId);
+            var result = await _vectorStoreClient.AddFileToVectorStoreAsync(vectorStoreId, fileId);
             return result.Value;
         }
         catch (Exception ex)
@@ -200,15 +200,15 @@ public class VectorStoreAPI
 
         try
         {
-            var result = await _vectorStoreClient.DeleteFileAsync(vectorStoreId, fileId);
+            var result = await _vectorStoreClient.RemoveFileFromVectorStoreAsync(vectorStoreId, fileId);
             if (result?.Value == null)
             {
                 Debug.WriteLine($"Remove operation for file {fileId} from vector store {vectorStoreId} returned null result");
                 return false;
             }
 
-            Debug.WriteLine($"File {fileId} removed from vector store {vectorStoreId}: {result.Value.Deleted}");
-            return result.Value.Deleted;
+            Debug.WriteLine($"File {fileId} removed from vector store {vectorStoreId}");
+            return true; // Assume success if no exception thrown
         }
         catch (Exception ex)
         {

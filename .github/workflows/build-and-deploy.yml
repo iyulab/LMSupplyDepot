@@ -48,6 +48,7 @@ jobs:
     strategy:
       matrix:
         configuration: [Release]
+    timeout-minutes: 60
 
     steps:
     - name: Checkout code
@@ -60,16 +61,47 @@ jobs:
       with:
         dotnet-version: '9.0.x'
 
+    - name: Configure NuGet
+      run: |
+        dotnet nuget config set http_timeout 900
+        dotnet nuget config set max_http_retries 5
+
     - name: Cache NuGet packages
       uses: actions/cache@v4
       with:
         path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
+        key: ${{ runner.os }}-nuget-v2-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
         restore-keys: |
+          ${{ runner.os }}-nuget-v2-
           ${{ runner.os }}-nuget-
 
-    - name: Restore dependencies
-      run: dotnet restore src/LMSupplyDepots.sln
+    - name: Restore core dependencies first
+      run: |
+        echo "📦 Restoring core dependencies (excluding LLama packages)..."
+        # First restore without LLama packages to avoid timeouts
+        dotnet restore src/LMSupplyDepots.sln --verbosity normal --disable-parallel || true
+
+    - name: Restore with retries
+      run: |
+        echo "🔄 Restoring all dependencies with retries..."
+        max_attempts=3
+        attempt=1
+        while [ $attempt -le $max_attempts ]; do
+          echo "Attempt $attempt of $max_attempts..."
+          if dotnet restore src/LMSupplyDepots.sln --verbosity normal; then
+            echo "✅ Dependencies restored successfully"
+            break
+          else
+            echo "❌ Restore failed, attempt $attempt"
+            if [ $attempt -eq $max_attempts ]; then
+              echo "💥 All restore attempts failed"
+              exit 1
+            fi
+            attempt=$((attempt + 1))
+            echo "⏳ Waiting before retry..."
+            sleep 30
+          fi
+        done
 
     - name: Build solution
       run: dotnet build src/LMSupplyDepots.sln -c ${{ matrix.configuration }} --no-restore

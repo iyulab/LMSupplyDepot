@@ -1,0 +1,19 @@
+<Project>
+  <!-- Conditional package references based on build environment -->
+  <PropertyGroup>
+    <!-- Skip heavy LLamaSharp backend packages in CI environments -->
+    <SkipLLamaBackends Condition="'$(CI)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">true</SkipLLamaBackends>
+  </PropertyGroup>
+
+  <!-- Conditionally exclude heavy packages during CI builds -->
+  <ItemGroup Condition="'$(SkipLLamaBackends)' == 'true'">
+    <PackageReference Remove="LLamaSharp.Backend.Cuda11" />
+    <PackageReference Remove="LLamaSharp.Backend.Cuda12" />
+    <PackageReference Remove="LLamaSharp.Backend.Vulkan" />
+  </ItemGroup>
+
+  <!-- Build-time warnings for conditional builds -->
+  <Target Name="WarnConditionalBuild" BeforeTargets="Build" Condition="'$(SkipLLamaBackends)' == 'true'">
+    <Message Text="⚠️ Building without LLamaSharp backend packages for CI compatibility" Importance="high" />
+  </Target>
+</Project>

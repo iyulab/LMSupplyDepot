@@ -56,19 +56,19 @@ jobs:
       run: |
         echo "⚠️ Building without LLamaSharp backend packages for CI compatibility"
         echo "Temporarily disabling NU1507 warnings for CI build due to multiple package sources"
-        dotnet restore src/LMSupplyDepots.sln --verbosity normal --disable-parallel --property WarningsNotAsErrors=NU1507
+        dotnet restore src/LMSupplyDepots.sln --verbosity normal --disable-parallel -p:WarningsNotAsErrors=NU1507
       shell: powershell
 
     - name: Build solution
       run: |
         echo "Building all projects..."
-        dotnet build src/LMSupplyDepots.sln --configuration Release --no-restore --verbosity normal --property WarningsNotAsErrors=NU1507
+        dotnet build src/LMSupplyDepots.sln --configuration Release --no-restore --verbosity normal -p:WarningsNotAsErrors=NU1507
       shell: powershell
 
     - name: Run tests
       run: |
-        echo "Running all tests..."
-        dotnet test src/LMSupplyDepots.sln --configuration Release --no-build --verbosity normal --logger trx --results-directory "TestResults/" --property WarningsNotAsErrors=NU1507
+        echo "Running CI tests (excluding LocalIntegration tests)..."
+        dotnet test src/LMSupplyDepots.sln --configuration Release --no-build --verbosity normal --logger trx --results-directory "TestResults/" --filter "Category!=LocalIntegration" -p:WarningsNotAsErrors=NU1507
       shell: powershell
 
     - name: Upload test results
@@ -82,7 +82,7 @@ jobs:
     - name: Test summary
       if: always()
       run: |
-        echo "Test execution completed."
+        echo "CI test execution completed (LocalIntegration tests excluded)."
         echo "Test result files:"
         if (Test-Path "TestResults") {
           Get-ChildItem -Path "TestResults" -Filter "*.trx" | ForEach-Object {
@@ -91,6 +91,9 @@ jobs:
         } else {
           echo "  No test result files found"
         }
+        echo ""
+        echo "ℹ️ Note: Tests requiring local models/API keys are excluded from CI"
+        echo "   Run locally with: dotnet test --filter \"Category=LocalIntegration\""
       shell: powershell
 
     - name: Build validation
@@ -120,4 +123,11 @@ jobs:
         echo "  - LMSupplyDepots.Host.Tests"
         echo ""
         echo "Build artifacts are ready for deployment via hostapp.yml workflow."
+        echo ""
+        echo "📝 Local Testing Information:"
+        echo "  - CI tests exclude LocalIntegration category (external dependencies)"
+        echo "  - To run local tests with models/APIs:"
+        echo "    dotnet test --filter \"Category=LocalIntegration\""
+        echo "  - To run all tests (CI + Local):"
+        echo "    dotnet test"
       shell: powershell

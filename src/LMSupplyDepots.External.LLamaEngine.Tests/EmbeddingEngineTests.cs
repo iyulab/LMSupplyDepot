@@ -34,6 +34,7 @@ public class EmbeddingEngineTests : IDisposable
     }
 
     [Fact]
+    [Trait("Category", "LocalIntegration")]
     public async Task DirectLLamaEmbedder_ShouldCreateEmbeddings()
     {
         // Skip if model file doesn't exist
@@ -91,6 +92,7 @@ public class EmbeddingEngineTests : IDisposable
     }
 
     [Fact]
+    [Trait("Category", "LocalIntegration")]
     public async Task DirectLLamaEmbedder_ShouldCreateMultipleEmbeddings()
     {
         // Skip if model file doesn't exist
@@ -163,6 +165,7 @@ public class EmbeddingEngineTests : IDisposable
     }
 
     [Fact]
+    [Trait("Category", "LocalIntegration")]
     public void ModelParams_ShouldValidate_EmbeddingConfiguration()
     {
         // Skip if model file doesn't exist

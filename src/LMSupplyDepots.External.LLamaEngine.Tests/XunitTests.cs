@@ -121,6 +121,7 @@ public class OpenAICompatibilityTests
     }
 
     [Fact]
+    [Trait("Category", "LocalIntegration")]
     public async Task ChatCompletions_Should_Work_With_OpenAI_Format()
     {
         // Arrange
@@ -213,6 +214,7 @@ public class OpenAICompatibilityTests
     }
 
     [Fact]
+    [Trait("Category", "LocalIntegration")]
     public async Task ChatCompletions_Stream_Should_Work_With_OpenAI_Format()
     {
         // Arrange
@@ -321,6 +323,7 @@ public class OpenAICompatibilityTests
     }
 
     [Fact]
+    [Trait("Category", "LocalIntegration")]
     public async Task Embeddings_Should_Work_With_OpenAI_Format()
     {
         // Arrange
@@ -419,6 +422,7 @@ public class OpenAICompatibilityTests
     }
 
     [Fact]
+    [Trait("Category", "LocalIntegration")]
     public async Task Models_List_Should_Work_With_OpenAI_Format()
     {
         // Arrange

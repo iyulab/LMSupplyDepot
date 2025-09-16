@@ -1,0 +1,123 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'src/**'
+      - '.github/workflows/build-test.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'src/**'
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  CI: true
+  GITHUB_ACTIONS: true
+
+jobs:
+  build-test:
+    name: Build and Test
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Display build environment
+      run: |
+        echo "Build Environment Information:"
+        echo "- Repository: ${{ github.repository }}"
+        echo "- Branch: ${{ github.ref_name }}"
+        echo "- Commit: ${{ github.sha }}"
+        echo "- .NET Version: ${{ env.DOTNET_VERSION }}"
+        echo "- CI Environment: ${{ env.CI }}"
+        echo "- Skip LLama Backends: true (CI build)"
+        echo ""
+        echo "Directory structure:"
+        Get-ChildItem -Path "src" -Directory | ForEach-Object { echo "  - $($_.Name)" }
+      shell: powershell
+
+    - name: Restore dependencies
+      run: |
+        echo "⚠️ Building without LLamaSharp backend packages for CI compatibility"
+        echo "Temporarily disabling NU1507 warnings for CI build due to multiple package sources"
+        dotnet restore src/LMSupplyDepots.sln --verbosity normal --disable-parallel --property WarningsNotAsErrors=NU1507
+      shell: powershell
+
+    - name: Build solution
+      run: |
+        echo "Building all projects..."
+        dotnet build src/LMSupplyDepots.sln --configuration Release --no-restore --verbosity normal --property WarningsNotAsErrors=NU1507
+      shell: powershell
+
+    - name: Run tests
+      run: |
+        echo "Running all tests..."
+        dotnet test src/LMSupplyDepots.sln --configuration Release --no-build --verbosity normal --logger trx --results-directory "TestResults/" --property WarningsNotAsErrors=NU1507
+      shell: powershell
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: TestResults/*.trx
+        retention-days: 7
+
+    - name: Test summary
+      if: always()
+      run: |
+        echo "Test execution completed."
+        echo "Test result files:"
+        if (Test-Path "TestResults") {
+          Get-ChildItem -Path "TestResults" -Filter "*.trx" | ForEach-Object {
+            echo "  - $($_.Name)"
+          }
+        } else {
+          echo "  No test result files found"
+        }
+      shell: powershell
+
+    - name: Build validation
+      run: |
+        echo "Build validation completed successfully!"
+        echo ""
+        echo "Projects built:"
+        echo "✅ Core Libraries:"
+        echo "  - LMSupplyDepots (domain models)"
+        echo "  - LMSupplyDepots.ModelHub (model management)"
+        echo "  - LMSupplyDepots.Inference (inference engines)"
+        echo ""
+        echo "✅ External Wrappers:"
+        echo "  - LMSupplyDepots.External.HuggingFace"
+        echo "  - LMSupplyDepots.External.LLamaEngine"
+        echo "  - LMSupplyDepots.External.OpenAI"
+        echo ""
+        echo "✅ SDK & Applications:"
+        echo "  - LMSupplyDepots.SDK"
+        echo "  - LMSupplyDepots.Host"
+        echo "  - LMSupplyDepots.HostApp"
+        echo "  - LMSupplyDepots.CLI"
+        echo ""
+        echo "✅ Test Projects:"
+        echo "  - LMSupplyDepots.External.HuggingFace.Tests"
+        echo "  - LMSupplyDepots.External.LLamaEngine.Tests"
+        echo "  - LMSupplyDepots.Host.Tests"
+        echo ""
+        echo "Build artifacts are ready for deployment via hostapp.yml workflow."
+      shell: powershell

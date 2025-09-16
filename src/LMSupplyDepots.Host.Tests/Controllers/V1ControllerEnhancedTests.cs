@@ -213,7 +213,7 @@ public class V1ControllerEnhancedTests
         var request = new OpenAIEmbeddingRequest
         {
             Model = "embedding-model",
-            Input = null // Missing input
+            Input = null! // Missing input
         };
 
         // Act

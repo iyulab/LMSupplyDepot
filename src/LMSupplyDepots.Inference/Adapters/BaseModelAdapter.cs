@@ -108,6 +108,6 @@ public abstract class BaseModelAdapter : IDisposable
     /// </summary>
     protected void ThrowIfDisposed()
     {
-        ObjectDisposedException.ThrowIf(_disposed, GetType().FullName);
+        ObjectDisposedException.ThrowIf(_disposed, GetType().FullName ?? GetType().Name);
     }
 }

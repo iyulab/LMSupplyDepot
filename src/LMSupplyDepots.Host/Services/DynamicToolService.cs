@@ -91,7 +91,7 @@ public class DynamicToolService : IDynamicToolService
         }
     }
 
-    public async Task<string> GenerateToolArgumentsAsync(
+    public Task<string> GenerateToolArgumentsAsync(
         Tool tool, 
         string userMessage, 
         string modelId,
@@ -107,12 +107,12 @@ public class DynamicToolService : IDynamicToolService
 
             var result = JsonSerializer.Serialize(arguments);
             _logger.LogDebug("Generated tool arguments: {Arguments}", result);
-            return result;
+            return Task.FromResult(result);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to generate tool arguments for {ToolName}", tool.Function.Name);
-            return "{}";
+            return Task.FromResult("{}");
         }
     }
 

@@ -259,7 +259,7 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
     /// <summary>
     /// Initializes the service
     /// </summary>
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -275,6 +275,8 @@ public class RepositoryModelLoaderService : IModelLoader, IDisposable
             _logger.LogError(ex, "Failed to initialize RepositoryModelLoaderService");
             // Don't throw here as this is initialization - the service should still be usable
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

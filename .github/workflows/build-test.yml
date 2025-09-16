@@ -93,7 +93,7 @@ jobs:
         }
         echo ""
         echo "ℹ️ Note: Tests requiring local models/API keys are excluded from CI"
-        echo "   Run locally with: dotnet test --filter 'Category=LocalIntegration'"
+        echo '   Run locally with: dotnet test --filter "Category=LocalIntegration"'
       shell: powershell
 
     - name: Build validation
@@ -127,7 +127,7 @@ jobs:
         echo "📝 Local Testing Information:"
         echo "  - CI tests exclude LocalIntegration category (external dependencies)"
         echo "  - To run local tests with models/APIs:"
-        echo "    dotnet test --filter 'Category=LocalIntegration'"
+        echo '    dotnet test --filter "Category=LocalIntegration"'
         echo "  - To run all tests (CI + Local):"
         echo "    dotnet test"
       shell: powershell

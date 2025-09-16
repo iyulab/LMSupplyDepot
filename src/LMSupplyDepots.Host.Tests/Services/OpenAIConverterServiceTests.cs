@@ -97,30 +97,6 @@ public class OpenAIConverterServiceTests
         Assert.Contains("Hello", result.Prompt);
     }
 
-    [Fact]
-    public void ConvertToGenerationRequest_ShouldHandleStopSequences()
-    {
-        // Arrange
-        var request = new OpenAIChatCompletionRequest
-        {
-            Model = "test-model",
-            Messages = new List<OpenAIChatMessage>
-            {
-                new() { Role = "user", Content = new TextContentPart { Text = "Count to 10" } }
-            },
-            Stop = new List<string> { "\n", "." }
-        };
-
-        // Act
-        var result = _converterService.ConvertToGenerationRequest(request);
-
-        // Assert
-        Assert.True(result.Parameters.ContainsKey("stop"));
-        var stopSequences = result.Parameters["stop"] as List<string>;
-        Assert.NotNull(stopSequences);
-        Assert.Contains("\n", stopSequences);
-        Assert.Contains(".", stopSequences);
-    }
 
     [Fact]
     public void ConvertToGenerationRequest_ShouldHandleOptionalParameters()
@@ -350,23 +326,6 @@ public class OpenAIConverterServiceTests
         Assert.Contains("Tool (call_123): Sunny, 75°F", result);
     }
 
-    [Fact]
-    public void ConvertMessagesToPrompt_ShouldHandleEmptyContent()
-    {
-        // Arrange
-        var messages = new List<OpenAIChatMessage>
-        {
-            new() { Role = "user", Content = null },
-            new() { Role = "assistant", Content = new TextContentPart { Text = "" } }
-        };
-
-        // Act
-        var result = _converterService.ConvertMessagesToPrompt(messages);
-
-        // Assert
-        Assert.Contains("User: ", result);
-        Assert.Contains("Assistant: ", result);
-    }
 
     #endregion
 

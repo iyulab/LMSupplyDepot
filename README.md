@@ -106,13 +106,13 @@ LMSupplyDepots는 로컬 환경에서 다양한 오픈소스 LLM을 쉽게 관�
 
 ### 호스팅 및 응용 프로그램
 
-**8. LMSupplyDepots.Server**
-- RESTful API 서버 구현
+**8. LMSupplyDepots.Host**
+- RESTful API 서버 구현 (OpenAI 호환)
 - 다양한 엔드포인트 (모델 관리, 추론, 임베딩)
 - SDK를 통한 핵심 기능 노출
-- OpenAI 호환 API 구현 (선택적)
+- 표준 OpenAI API v1 스펙 완전 구현
 
-**9. LMSupplyDepots.Server.Host**
+**9. LMSupplyDepots.HostApp**
 - 웹 서버 호스트 애플리케이션
 - 설정 로드, 로깅, 서버 생명주기 관리
 - 스탠드얼론 배포 지원
@@ -129,20 +129,26 @@ graph TD
     A[LMSupplyDepots.CLI] --> B[LMSupplyDepots.Host]
     C[LMSupplyDepots.HostApp] --> B
     B --> D[LMSupplyDepots.SDK]
-    E[LMSupplyDepots.Server] --> D
     D --> F[LMSupplyDepots]
     D --> G[LMSupplyDepots.ModelHub]
     D --> H[LMSupplyDepots.Inference]
     G --> F
     H --> F
-    
+
     I[LMSupplyDepots.External.HuggingFace]
     J[LMSupplyDepots.External.LLamaEngine]
     K[LMSupplyDepots.External.OpenAI]
-    
+
+    L[LMSupplyDepots.Host.Tests]
+    M[LMSupplyDepots.External.HuggingFace.Tests]
+    N[LMSupplyDepots.External.LLamaEngine.Tests]
+
     style I fill:#e1f5fe
     style J fill:#e1f5fe
     style K fill:#e1f5fe
+    style L fill:#fff3e0
+    style M fill:#fff3e0
+    style N fill:#fff3e0
 ```
 
 **애플리케이션 계층**
@@ -156,6 +162,13 @@ LMSupplyDepots.HostApp ---> LMSupplyDepots.Host
 LMSupplyDepots.Host ---> LMSupplyDepots.SDK
 ```
 
+**테스트 계층**
+```
+LMSupplyDepots.Host.Tests
+LMSupplyDepots.External.HuggingFace.Tests
+LMSupplyDepots.External.LLamaEngine.Tests
+```
+
 **SDK 통합 계층**
 ```
 LMSupplyDepots.SDK  ---> LMSupplyDepots
@@ -167,7 +180,6 @@ LMSupplyDepots.SDK  ---> LMSupplyDepots
 ```
 LMSupplyDepots.ModelHub ---> LMSupplyDepots
 LMSupplyDepots.Inference ---> LMSupplyDepots
-LMSupplyDepots.Server ---> LMSupplyDepots.SDK
 ```
 
 **독립적 외부 래퍼** *(아무런 종속성을 갖지 않습니다)*

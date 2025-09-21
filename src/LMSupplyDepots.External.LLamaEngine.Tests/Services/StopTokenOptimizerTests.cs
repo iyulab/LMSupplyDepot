@@ -141,7 +141,7 @@ public class StopTokenOptimizerTests
 
         // Assert
         Assert.True(result.IsValid);
-        Assert.Empty(result.Issues.Where(i => i.Severity >= IssueSeverity.Error));
+        Assert.DoesNotContain(result.Issues, i => i.Severity >= IssueSeverity.Error);
     }
 
     [Fact]

@@ -125,7 +125,7 @@ public class ReasoningServiceTests
     public void IsReasoningResponse_WithNull_ShouldReturnFalse()
     {
         // Act
-        var result = _reasoningService.IsReasoningResponse(null);
+        var result = _reasoningService.IsReasoningResponse(null!);
 
         // Assert
         Assert.False(result);
@@ -345,7 +345,7 @@ public class ReasoningServiceTests
     public void CountReasoningTokens_WithNull_ShouldReturnZero()
     {
         // Act
-        var result = _reasoningService.CountReasoningTokens(null);
+        var result = _reasoningService.CountReasoningTokens(null!);
 
         // Assert
         Assert.Equal(0, result);
@@ -409,7 +409,7 @@ public class ReasoningServiceTests
     public async Task ProcessReasoningAsync_WithNullContent_ShouldReturnEmptyResult()
     {
         // Act
-        var result = await _reasoningService.ProcessReasoningAsync(null);
+        var result = await _reasoningService.ProcessReasoningAsync(null!);
 
         // Assert
         Assert.False(result.HasReasoning);

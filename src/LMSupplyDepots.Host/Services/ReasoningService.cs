@@ -112,7 +112,7 @@ public class ReasoningService : IReasoningService
         _logger = logger;
     }
 
-    public async Task<ReasoningResult> ProcessReasoningAsync(string content, CancellationToken cancellationToken = default)
+    public Task<ReasoningResult> ProcessReasoningAsync(string content, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -120,7 +120,7 @@ public class ReasoningService : IReasoningService
 
             if (string.IsNullOrEmpty(content))
             {
-                return new ReasoningResult { OriginalContent = content ?? string.Empty };
+                return Task.FromResult(new ReasoningResult { OriginalContent = content ?? string.Empty });
             }
 
             var result = new ReasoningResult
@@ -144,16 +144,16 @@ public class ReasoningService : IReasoningService
                 result.FinalAnswer = content;
             }
 
-            return result;
+            return Task.FromResult(result);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing reasoning content");
-            return new ReasoningResult
+            return Task.FromResult(new ReasoningResult
             {
                 OriginalContent = content ?? string.Empty,
                 FinalAnswer = content ?? string.Empty
-            };
+            });
         }
     }
 

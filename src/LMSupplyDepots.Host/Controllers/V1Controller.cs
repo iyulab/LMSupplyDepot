@@ -297,7 +297,7 @@ public class V1Controller : ControllerBase
                             Object = chatResponse.Object,
                             Created = chatResponse.Created,
                             Model = chatResponse.Model,
-                            Usage = chatResponse.Usage,
+                            Usage = chatResponse.Usage!,
                             Choices = new List<OpenAIChatChoice>
                             {
                                 new OpenAIChatChoice
@@ -348,7 +348,7 @@ public class V1Controller : ControllerBase
                                 Object = chatResponse.Object,
                                 Created = chatResponse.Created,
                                 Model = chatResponse.Model,
-                                Usage = chatResponse.Usage,
+                                Usage = chatResponse.Usage!,
                                 Choices = new List<OpenAIChatChoice>
                                 {
                                     new OpenAIChatChoice

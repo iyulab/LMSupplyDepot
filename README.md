@@ -16,13 +16,17 @@ LMSupplyDepots는 로컬 환경에서 다양한 오픈소스 LLM을 쉽게 관�
 - 커스텀 모델 생성 및 수정 지원
 
 ### ⚡ **모델 인퍼런스 엔진**
-- 로컬 GPU/CPU를 활용한 고성능 추론
+- 로컬 GPU/CPU를 활용한 추론
 - 다양한 모델 포맷(GGUF, GGML, SafeTensors) 지원
+- o1-style 추론/사고(reasoning/thinking) 지원
+- 고급 Jinja2 템플릿 처리
+- 모델별 최적화된 stop token 처리
 - 배치 처리 및 메모리 최적화
 
 ### 🌐 **호스팅 서비스**
 - 로컬 서버 호스팅
-- RESTful API 제공
+- OpenAI API 호환 RESTful API 제공
+- reasoning_tokens 추적 지원
 - 웹 인터페이스를 통한 모델 관리
 
 ### 🎯 **모델 허브**
@@ -97,6 +101,8 @@ LMSupplyDepots는 로컬 환경에서 다양한 오픈소스 LLM을 쉽게 관�
 **6. LMSupplyDepots.External.LLamaEngine**
 - LLama, GGUF, GGML 모델 추론 엔진
 - 텍스트 생성, 임베딩 생성 기능
+- 완전한 Jinja2 템플릿 파서 (토크나이저, AST, 평가기)
+- 아키텍처별 stop token 최적화 (LLaMA, Phi3, Mistral, Qwen, Gemma, DeepSeek)
 - LMSupplyDepots 의존성 없음 (독립적 사용 가능)
 
 **7. LMSupplyDepots.External.OpenAI**
@@ -109,8 +115,9 @@ LMSupplyDepots는 로컬 환경에서 다양한 오픈소스 LLM을 쉽게 관�
 **8. LMSupplyDepots.Host**
 - RESTful API 서버 구현 (OpenAI 호환)
 - 다양한 엔드포인트 (모델 관리, 추론, 임베딩)
+- ReasoningService - o1-style 추론 콘텐츠 처리
 - SDK를 통한 핵심 기능 노출
-- 표준 OpenAI API v1 스펙 완전 구현
+- 표준 OpenAI API v1 스펙 구현
 
 **9. LMSupplyDepots.HostApp**
 - 웹 서버 호스트 애플리케이션

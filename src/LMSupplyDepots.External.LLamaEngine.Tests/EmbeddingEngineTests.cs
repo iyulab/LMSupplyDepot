@@ -23,7 +23,7 @@ public class EmbeddingEngineTests : IDisposable
         _output = output;
 
         // Test model path - using nomic embedding model
-        _testModelPath = @"D:\filer-data\models\nomic-ai_nomic-embed-text-v2-moe-GGUF\nomic-embed-text-v2-moe.Q2_K.gguf";
+        _testModelPath = @"D:\filer-data\models\bartowski_Llama-3.2-3B-Instruct-GGUF\Llama-3.2-3B-Instruct-IQ3_M.gguf";
 
         // Set up DI container with minimal dependencies
         var services = new ServiceCollection();

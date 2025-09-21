@@ -1,5 +1,6 @@
 using LMSupplyDepots.SDK.OpenAI.Services;
 using LMSupplyDepots.SDK.Tools;
+using LMSupplyDepots.External.LLamaEngine.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LMSupplyDepots.SDK.Extensions;
@@ -14,6 +15,10 @@ public static class OpenAIServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddOpenAICompatibility(this IServiceCollection services)
     {
+        // Add stop token optimizer for advanced stop token processing
+        services.AddScoped<IStopTokenOptimizer, StopTokenOptimizer>();
+
+        // Add OpenAI converter service with stop token optimizer dependency
         services.AddScoped<IOpenAIConverterService, OpenAIConverterService>();
 
         return services;

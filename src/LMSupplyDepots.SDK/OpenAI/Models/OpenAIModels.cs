@@ -259,6 +259,9 @@ public class OpenAIUsage
     [JsonPropertyName("completion_tokens")]
     public int? CompletionTokens { get; set; }
 
+    [JsonPropertyName("reasoning_tokens")]
+    public int? ReasoningTokens { get; set; }
+
     [JsonPropertyName("total_tokens")]
     public int TotalTokens { get; set; }
 }

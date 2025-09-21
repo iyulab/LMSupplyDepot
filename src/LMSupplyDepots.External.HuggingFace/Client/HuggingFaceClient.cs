@@ -432,43 +432,17 @@ public class HuggingFaceClient : IHuggingFaceClient, IRepositoryDownloader, IDis
         string repoId,
         CancellationToken cancellationToken = default)
     {
-        var requestUri = $"https://huggingface.co/api/models/{repoId}";
-
         try
         {
             var result = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-            var model = await FindModelByRepoIdAsync(repoId, cancellationToken);
 
-            // siblings 배열에서 각 파일의 경로 추출
-            var siblings = model.Siblings ?? [];
-            // 하위경로에 GGUF 파일이 있는지 확인
-            var subFiles = siblings.Where(p => p.Filename.Contains('/') && p.Filename.EndsWith(".gguf"));
-            if (subFiles.Any())
-            {
-                var dirGroups = siblings
-                    .Where(s => !string.IsNullOrEmpty(s.Filename))
-                    .GroupBy(s => Path.GetDirectoryName(s.Filename))
-                    .Where(g => !string.IsNullOrEmpty(g.Key));
+            // Use recursive approach to get all files from tree API
+            await GetFileSizesRecursiveAsync(repoId, "", result, cancellationToken);
 
-                // 각 디렉토리별로 파일 크기 조회
-                foreach (var group in dirGroups)
-                {
-                    var treePath = group.Key!.Replace('\\', '/');
-                    await GetFileSizesInDirectoryAsync(repoId, treePath, result, cancellationToken);
-                }
-            }
-            else
-            {
-                // 루트 디렉토리의 파일들 크기 조회
-                var rootFiles = siblings
-                        .Where(s => !string.IsNullOrEmpty(s.Filename) &&
-                                   !s.Filename.Contains('/') &&
-                                   !s.Filename.Contains('\\'));
-                if (rootFiles.Any())
-                {
-                    await GetFileSizesInDirectoryAsync(repoId, "", result, cancellationToken);
-                }
-            }
+            _logger?.LogInformation("Found {Count} files with total size {TotalSize} for repository {RepoId}",
+                result.Count,
+                result.Values.Sum(),
+                repoId);
 
             return result;
         }
@@ -479,6 +453,52 @@ public class HuggingFaceClient : IHuggingFaceClient, IRepositoryDownloader, IDis
                 $"Failed to get repository file sizes for '{repoId}'",
                 (ex as HttpRequestException)?.StatusCode ?? HttpStatusCode.InternalServerError,
                 ex);
+        }
+    }
+
+    /// <summary>
+    /// Recursively gets file sizes from repository tree structure.
+    /// </summary>
+    private async Task GetFileSizesRecursiveAsync(
+        string repoId,
+        string treePath,
+        Dictionary<string, long> results,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger?.LogDebug("Getting file sizes for path: {RepoId}/{TreePath}", repoId, treePath ?? "(root)");
+
+            var files = await GetRepositoryFilesAsync(repoId, treePath, cancellationToken);
+
+            foreach (var file in files)
+            {
+                if (file.IsFile)
+                {
+                    // Use effective size to handle LFS files correctly
+                    results[file.Path] = file.GetEffectiveSize();
+                    _logger?.LogTrace("Added file: {Path} ({Size} bytes)", file.Path, file.GetEffectiveSize());
+                }
+                else if (file.IsDirectory)
+                {
+                    // Recursively explore subdirectories
+                    var dirName = file.Path.Split('/').Last();
+                    var subPath = string.IsNullOrEmpty(treePath)
+                        ? dirName
+                        : $"{treePath}/{dirName}";
+
+                    _logger?.LogDebug("Exploring subdirectory: {SubPath}", subPath);
+                    await GetFileSizesRecursiveAsync(repoId, subPath, results, cancellationToken);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex,
+                "Failed to get repository tree for '{RepoId}' at path '{TreePath}'",
+                repoId, treePath ?? "(root)");
+
+            // Don't throw - continue with other directories
         }
     }
 

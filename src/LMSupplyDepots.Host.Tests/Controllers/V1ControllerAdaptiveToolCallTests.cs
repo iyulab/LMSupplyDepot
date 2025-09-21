@@ -4,6 +4,7 @@ using LMSupplyDepots.SDK.OpenAI.Models;
 using LMSupplyDepots.SDK.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
@@ -19,6 +20,7 @@ public class V1ControllerAdaptiveToolCallTests
     private readonly Mock<IToolExecutionService> _mockToolExecutionService;
     private readonly Mock<IDynamicToolService> _mockDynamicToolService;
     private readonly Mock<IModelMetadataService> _mockModelMetadataService;
+    private readonly IReasoningService _reasoningService;
     private readonly Mock<ILogger<V1Controller>> _mockLogger;
     private readonly Mock<IServiceProvider> _mockServiceProvider;
     private readonly V1Controller _controller;
@@ -29,6 +31,7 @@ public class V1ControllerAdaptiveToolCallTests
         _mockToolExecutionService = new Mock<IToolExecutionService>();
         _mockDynamicToolService = new Mock<IDynamicToolService>();
         _mockModelMetadataService = new Mock<IModelMetadataService>();
+        _reasoningService = new ReasoningService(NullLogger<ReasoningService>.Instance);
         _mockLogger = new Mock<ILogger<V1Controller>>();
         _mockServiceProvider = new Mock<IServiceProvider>();
 
@@ -41,6 +44,7 @@ public class V1ControllerAdaptiveToolCallTests
             _mockHostService.Object,
             _mockToolExecutionService.Object,
             _mockDynamicToolService.Object,
+            _reasoningService,
             _mockLogger.Object,
             _mockServiceProvider.Object);
     }

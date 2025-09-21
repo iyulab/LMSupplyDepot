@@ -3,6 +3,7 @@ using LMSupplyDepots.Host.Services;
 using LMSupplyDepots.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
@@ -17,6 +18,7 @@ public class V1ControllerAliasCacheTests
     private readonly Mock<IHostService> _mockHostService;
     private readonly Mock<IToolExecutionService> _mockToolExecutionService;
     private readonly Mock<IDynamicToolService> _mockDynamicToolService;
+    private readonly IReasoningService _reasoningService;
     private readonly Mock<ILogger<V1Controller>> _mockLogger;
     private readonly Mock<IServiceProvider> _mockServiceProvider;
     private readonly V1Controller _controller;
@@ -26,6 +28,7 @@ public class V1ControllerAliasCacheTests
         _mockHostService = new Mock<IHostService>();
         _mockToolExecutionService = new Mock<IToolExecutionService>();
         _mockDynamicToolService = new Mock<IDynamicToolService>();
+        _reasoningService = new ReasoningService(NullLogger<ReasoningService>.Instance);
         _mockLogger = new Mock<ILogger<V1Controller>>();
         _mockServiceProvider = new Mock<IServiceProvider>();
 
@@ -33,6 +36,7 @@ public class V1ControllerAliasCacheTests
             _mockHostService.Object,
             _mockToolExecutionService.Object,
             _mockDynamicToolService.Object,
+            _reasoningService,
             _mockLogger.Object,
             _mockServiceProvider.Object);
     }

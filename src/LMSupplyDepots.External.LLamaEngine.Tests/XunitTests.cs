@@ -108,7 +108,7 @@ public class OpenAICompatibilityTests
     public OpenAICompatibilityTests(ITestOutputHelper output)
     {
         _output = output;
-        _modelPath = @"D:\filer-data\models\unsloth_Llama-3.2-1B-Instruct-GGUF\Llama-3.2-1B-Instruct-UD-IQ1_S.gguf";
+        _modelPath = @"D:\filer-data\models\bartowski_Llama-3.2-3B-Instruct-GGUF\Llama-3.2-3B-Instruct-IQ3_M.gguf";
         // For embedding tests, we'll use the same model configured for embeddings
         _embeddingModelPath = _modelPath;
     }

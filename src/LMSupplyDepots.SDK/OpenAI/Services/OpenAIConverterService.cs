@@ -59,10 +59,12 @@ public interface IOpenAIConverterService
 public class OpenAIConverterService : IOpenAIConverterService
 {
     private readonly ILogger<OpenAIConverterService> _logger;
+    private readonly IStopTokenOptimizer? _stopTokenOptimizer;
 
-    public OpenAIConverterService(ILogger<OpenAIConverterService> logger)
+    public OpenAIConverterService(ILogger<OpenAIConverterService> logger, IStopTokenOptimizer? stopTokenOptimizer = null)
     {
         _logger = logger;
+        _stopTokenOptimizer = stopTokenOptimizer;
     }
 
     public OpenAIModel ConvertToOpenAIModel(LMModel model, long timestamp)
@@ -159,91 +161,8 @@ public class OpenAIConverterService : IOpenAIConverterService
             Parameters = new Dictionary<string, object?>()
         };
 
-        // Handle stop sequences - either from request or metadata
-        List<string> stopSequences = new();
-        
-        if (request.Stop != null)
-        {
-            stopSequences = ConvertStopSequence(request.Stop);
-        }
-        
-        // Try to get stop tokens from model metadata first (even if no stop provided in request)
-        if (metadataService != null)
-        {
-            try
-            {
-                var metadata = await metadataService.GetModelMetadataAsync(request.Model, cancellationToken);
-                if (metadata.StopTokens.Any())
-                {
-                    // Use stop tokens extracted from GGUF metadata - prefer metadata over request
-                    stopSequences = metadata.StopTokens.ToList();
-                    _logger.LogInformation("Using {Count} stop tokens from GGUF metadata: {StopTokens}", 
-                        stopSequences.Count, string.Join(", ", stopSequences.Take(3)));
-                }
-                else if (stopSequences.Count == 0 && !string.IsNullOrEmpty(modelArchitecture))
-                {
-                    // No metadata stop tokens and no request stop, use architecture defaults
-                    stopSequences = GetDefaultStopTokensForArchitecture(modelArchitecture);
-                    _logger.LogInformation("No GGUF stop tokens found, using architecture defaults for {Architecture}: {StopTokens}", 
-                        modelArchitecture, string.Join(", ", stopSequences));
-                }
-                else if (stopSequences.Count > 0 && !string.IsNullOrEmpty(modelArchitecture))
-                {
-                    // Request provided stop tokens, filter them for compatibility
-                    stopSequences = FilterStopSequencesForArchitecture(stopSequences, modelArchitecture);
-                    
-                    if (stopSequences.Count == 0)
-                    {
-                        // All request stop tokens were filtered out, use defaults
-                        stopSequences = GetDefaultStopTokensForArchitecture(modelArchitecture);
-                        _logger.LogInformation("Request stop tokens filtered out, using architecture defaults for {Architecture}: {StopTokens}", 
-                            modelArchitecture, string.Join(", ", stopSequences));
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to get stop tokens from metadata, falling back to architecture-based approach");
-                
-                // Fallback to original logic
-                if (stopSequences.Count == 0 && !string.IsNullOrEmpty(modelArchitecture))
-                {
-                    stopSequences = GetDefaultStopTokensForArchitecture(modelArchitecture);
-                    _logger.LogInformation("Using fallback architecture defaults for {Architecture}: {StopTokens}", 
-                        modelArchitecture, string.Join(", ", stopSequences));
-                }
-                else if (stopSequences.Count > 0 && !string.IsNullOrEmpty(modelArchitecture))
-                {
-                    stopSequences = FilterStopSequencesForArchitecture(stopSequences, modelArchitecture);
-                    
-                    if (stopSequences.Count == 0)
-                    {
-                        stopSequences = GetDefaultStopTokensForArchitecture(modelArchitecture);
-                        _logger.LogInformation("Filtered stop tokens empty, using architecture defaults for {Architecture}: {StopTokens}", 
-                            modelArchitecture, string.Join(", ", stopSequences));
-                    }
-                }
-            }
-        }
-        else if (stopSequences.Count == 0 && !string.IsNullOrEmpty(modelArchitecture))
-        {
-            // No metadata service available and no request stop tokens, use architecture-based defaults
-            stopSequences = GetDefaultStopTokensForArchitecture(modelArchitecture);
-            _logger.LogInformation("No metadata service available, using architecture defaults for {Architecture}: {StopTokens}", 
-                modelArchitecture, string.Join(", ", stopSequences));
-        }
-        else if (stopSequences.Count > 0 && !string.IsNullOrEmpty(modelArchitecture))
-        {
-            // No metadata service but request provided stop tokens, filter them
-            stopSequences = FilterStopSequencesForArchitecture(stopSequences, modelArchitecture);
-            
-            if (stopSequences.Count == 0)
-            {
-                stopSequences = GetDefaultStopTokensForArchitecture(modelArchitecture);
-                _logger.LogInformation("Request stop tokens filtered out without metadata, using architecture defaults for {Architecture}: {StopTokens}", 
-                    modelArchitecture, string.Join(", ", stopSequences));
-            }
-        }
+        // Handle stop sequences with advanced optimization
+        List<string> stopSequences = await OptimizeStopTokensAsync(request, modelArchitecture, metadataService, hasToolCalls, cancellationToken);
         
         // Apply stop sequences to generation request
         if (stopSequences.Count > 0)
@@ -444,6 +363,152 @@ public class OpenAIConverterService : IOpenAIConverterService
         // No tool calling support, use standard prompt format
         _logger.LogDebug("No tool calling support detected, using standard prompt format");
         return ConvertMessagesToPrompt(messages);
+    }
+
+    /// <summary>
+    /// Advanced stop token optimization using the dedicated optimizer service
+    /// </summary>
+    private async Task<List<string>> OptimizeStopTokensAsync(
+        OpenAIChatCompletionRequest request,
+        string? modelArchitecture,
+        IModelMetadataService? metadataService,
+        bool hasToolCalls,
+        CancellationToken cancellationToken)
+    {
+        // Get request stop tokens
+        var requestStopTokens = request.Stop != null ? ConvertStopSequence(request.Stop) : new List<string>();
+
+        // Use advanced optimizer if available
+        if (_stopTokenOptimizer != null && !string.IsNullOrEmpty(modelArchitecture))
+        {
+            var context = new ModelOptimizationContext
+            {
+                SupportsToolCalling = hasToolCalls,
+                ChatTemplateFormat = GetChatTemplateFormat(modelArchitecture),
+                HasSystemMessages = request.Messages.Any(m => m.Role.ToLowerInvariant() == "system"),
+                HasToolResults = request.Messages.Any(m => m.Role.ToLowerInvariant() == "tool"),
+                ExpectedLength = DetermineExpectedLength(request.MaxCompletionTokens ?? 256),
+                Strategy = DetermineStopTokenStrategy(request.Temperature ?? 0.7f),
+                MaxTokens = request.MaxCompletionTokens ?? 256,
+                Temperature = request.Temperature ?? 0.7f
+            };
+
+            try
+            {
+                var optimizedStops = _stopTokenOptimizer.OptimizeStopTokens(modelArchitecture, requestStopTokens, context);
+
+                _logger.LogInformation("Advanced stop token optimization for {Architecture}: {Count} total, {Primary} primary, {Secondary} secondary. Reasoning: {Reasoning}",
+                    modelArchitecture, optimizedStops.GetAllStopTokens().Count,
+                    optimizedStops.PrimaryStopTokens.Count, optimizedStops.SecondaryStopTokens.Count,
+                    optimizedStops.OptimizationReasoning);
+
+                return optimizedStops.GetAllStopTokens();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Advanced stop token optimization failed, falling back to legacy method");
+            }
+        }
+
+        // Fallback to legacy stop token handling
+        return await LegacyStopTokenHandlingAsync(requestStopTokens, modelArchitecture, metadataService, cancellationToken);
+    }
+
+    /// <summary>
+    /// Legacy stop token handling for backward compatibility
+    /// </summary>
+    private async Task<List<string>> LegacyStopTokenHandlingAsync(
+        List<string> requestStopTokens,
+        string? modelArchitecture,
+        IModelMetadataService? metadataService,
+        CancellationToken cancellationToken)
+    {
+        var stopSequences = new List<string>(requestStopTokens);
+
+        // Try to get stop tokens from model metadata first
+        if (metadataService != null)
+        {
+            try
+            {
+                var metadata = await metadataService.GetModelMetadataAsync("model", cancellationToken);
+                if (metadata.StopTokens.Any())
+                {
+                    stopSequences = metadata.StopTokens.ToList();
+                    _logger.LogInformation("Using {Count} stop tokens from GGUF metadata", stopSequences.Count);
+                }
+                else if (stopSequences.Count == 0 && !string.IsNullOrEmpty(modelArchitecture))
+                {
+                    stopSequences = GetDefaultStopTokensForArchitecture(modelArchitecture);
+                    _logger.LogInformation("Using architecture defaults for {Architecture}", modelArchitecture);
+                }
+                else if (stopSequences.Count > 0 && !string.IsNullOrEmpty(modelArchitecture))
+                {
+                    stopSequences = FilterStopSequencesForArchitecture(stopSequences, modelArchitecture);
+                    if (stopSequences.Count == 0)
+                    {
+                        stopSequences = GetDefaultStopTokensForArchitecture(modelArchitecture);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get stop tokens from metadata");
+                if (stopSequences.Count == 0 && !string.IsNullOrEmpty(modelArchitecture))
+                {
+                    stopSequences = GetDefaultStopTokensForArchitecture(modelArchitecture);
+                }
+            }
+        }
+        else if (stopSequences.Count == 0 && !string.IsNullOrEmpty(modelArchitecture))
+        {
+            stopSequences = GetDefaultStopTokensForArchitecture(modelArchitecture);
+        }
+
+        return stopSequences;
+    }
+
+    /// <summary>
+    /// Determine chat template format from architecture
+    /// </summary>
+    private string GetChatTemplateFormat(string architecture)
+    {
+        return architecture.ToLowerInvariant() switch
+        {
+            "llama" => "llama-native",
+            "phi3" or "phi" => "phi",
+            "mistral" or "mixtral" => "mistral",
+            "qwen" or "qwen2" => "chatml",
+            "gemma" => "gemma",
+            "deepseek" => "deepseek",
+            _ => "generic"
+        };
+    }
+
+    /// <summary>
+    /// Determine expected generation length category
+    /// </summary>
+    private GenerationLength DetermineExpectedLength(int maxTokens)
+    {
+        return maxTokens switch
+        {
+            < 50 => GenerationLength.Short,
+            < 200 => GenerationLength.Medium,
+            < 1000 => GenerationLength.Long,
+            _ => GenerationLength.VeryLong
+        };
+    }
+
+    /// <summary>
+    /// Determine stop token strategy based on temperature
+    /// </summary>
+    private StopTokenStrategy DetermineStopTokenStrategy(float temperature)
+    {
+        return temperature switch
+        {
+            < 0.3f => StopTokenStrategy.Conservative,
+            < 1.0f => StopTokenStrategy.Balanced,
+            _ => StopTokenStrategy.Permissive
+        };
     }
 
     #region Private Helper Methods

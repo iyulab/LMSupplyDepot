@@ -23,6 +23,7 @@ public class V1Controller : ControllerBase
     private readonly IToolExecutionService _toolExecutionService;
     private readonly IDynamicToolService _dynamicToolService;
     private readonly IModelMetadataService? _modelMetadataService;
+    private readonly IReasoningService _reasoningService;
     private readonly ILogger<V1Controller> _logger;
 
     /// <summary>
@@ -32,12 +33,14 @@ public class V1Controller : ControllerBase
         IHostService hostService,
         IToolExecutionService toolExecutionService,
         IDynamicToolService dynamicToolService,
+        IReasoningService reasoningService,
         ILogger<V1Controller> logger,
         IServiceProvider serviceProvider)
     {
         _hostService = hostService;
         _toolExecutionService = toolExecutionService;
         _dynamicToolService = dynamicToolService;
+        _reasoningService = reasoningService;
         _modelMetadataService = serviceProvider.GetService<IModelMetadataService>();
         _logger = logger;
     }
@@ -247,6 +250,32 @@ public class V1Controller : ControllerBase
             if (chatResponse?.Choices?.FirstOrDefault()?.Message != null)
             {
                 var message = chatResponse.Choices.First().Message;
+
+                // Process reasoning content if present
+                var messageContent = ExtractContentText(message.Content);
+                if (!string.IsNullOrEmpty(messageContent))
+                {
+                    var reasoningResult = await _reasoningService.ProcessReasoningAsync(messageContent, cancellationToken);
+
+                    if (reasoningResult.HasReasoning)
+                    {
+                        _logger.LogDebug("Reasoning content detected: thinking={ThinkingLength}, answer={AnswerLength}, tokens={ReasoningTokens}",
+                            reasoningResult.ThinkingContent.Length, reasoningResult.FinalAnswer.Length, reasoningResult.ReasoningTokens);
+
+                        // Update message content to only include the final answer
+                        if (message.Content is TextContentPart textContent)
+                        {
+                            textContent.Text = reasoningResult.FinalAnswer;
+                        }
+
+                        // Update usage to include reasoning tokens
+                        if (chatResponse.Usage != null)
+                        {
+                            chatResponse.Usage.ReasoningTokens = reasoningResult.ReasoningTokens;
+                            chatResponse.Usage.TotalTokens += reasoningResult.ReasoningTokens;
+                        }
+                    }
+                }
 
                 // Handle tool_choice "required" by generating appropriate tool call
                 if (request.Tools != null && request.Tools.Count > 0 &&
@@ -459,12 +488,47 @@ public class V1Controller : ControllerBase
                 await Response.Body.FlushAsync(cancellationToken);
             }
 
+            // Process reasoning content in accumulated response
+            var fullContent = accumulatedContent.ToString();
+            var reasoningResult = await _reasoningService.ProcessReasoningAsync(fullContent, cancellationToken);
+
+            if (reasoningResult.HasReasoning)
+            {
+                _logger.LogDebug("Streaming reasoning content detected: thinking={ThinkingLength}, answer={AnswerLength}, tokens={ReasoningTokens}",
+                    reasoningResult.ThinkingContent.Length, reasoningResult.FinalAnswer.Length, reasoningResult.ReasoningTokens);
+
+                // Send corrected content chunk with final answer only
+                var correctedResponse = new
+                {
+                    id = completionId,
+                    @object = "chat.completion.chunk",
+                    created = timestamp,
+                    model = request.Model,
+                    choices = new[]
+                    {
+                        new
+                        {
+                            index = 0,
+                            delta = new { content = reasoningResult.FinalAnswer },
+                            finish_reason = (string?)null
+                        }
+                    }
+                };
+
+                var correctedJson = JsonSerializer.Serialize(correctedResponse, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                await Response.WriteAsync($"data: {correctedJson}\n\n");
+                await Response.Body.FlushAsync(cancellationToken);
+
+                // Update accumulated content to final answer for tool parsing
+                fullContent = reasoningResult.FinalAnswer;
+            }
+
             // After streaming is complete, check for tool calls if tools are available
             string finishReason = await DetermineStreamingFinishReasonAsync(
-                accumulatedContent.ToString(),
+                fullContent,
                 hasTools,
                 request.Tools,
-                accumulatedContent.Length,
+                fullContent.Length,
                 request.MaxCompletionTokens ?? 2048,
                 true,
                 request.Model,
@@ -473,7 +537,6 @@ public class V1Controller : ControllerBase
 
             if (hasTools)
             {
-                var fullContent = accumulatedContent.ToString();
                 var toolCalls = await _dynamicToolService.ParseToolCallsAsync(fullContent, request.Tools!, request.Model, cancellationToken);
 
                 if (toolCalls.Count > 0)

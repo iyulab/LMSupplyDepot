@@ -38,6 +38,9 @@ public static class ServiceCollectionExtensions
         // Register dynamic tool service
         services.TryAddSingleton<IDynamicToolService, DynamicToolService>();
 
+        // Register reasoning service
+        services.TryAddSingleton<IReasoningService, ReasoningService>();
+
         return services;
     }
 }

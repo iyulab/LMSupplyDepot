@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\LMSupplyDepots.Inference\LMSupplyDepots.Inference.csproj" />
     <ProjectReference Include="..\LMSupplyDepots.ModelHub\LMSupplyDepots.ModelHub.csproj" />
+    <ProjectReference Include="..\LMSupplyDepots.External.LLamaEngine\LMSupplyDepots.External.LLamaEngine.csproj" />
   </ItemGroup>
 
 </Project>

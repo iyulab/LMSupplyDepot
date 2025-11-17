@@ -24,14 +24,14 @@ public static class ServiceCollectionExtensions
         // Register options
         services.TryAddSingleton(Microsoft.Extensions.Options.Options.Create(options));
 
-        // Ensure models directory exists
+        // Ensure data directory exists
         if (!Directory.Exists(options.DataPath))
         {
             Directory.CreateDirectory(options.DataPath);
         }
 
-        // Configure ModelHub services
-        ConfigureModelHubServices(services, options.DataPath);
+        // Configure ModelHub services with full options
+        ConfigureModelHubServices(services, options);
 
         // Configure Inference services
         ConfigureInferenceServices(services);
@@ -59,7 +59,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Configures ModelHub services
     /// </summary>
-    private static void ConfigureModelHubServices(IServiceCollection services, string modelsPath)
+    private static void ConfigureModelHubServices(IServiceCollection services, LMSupplyDepotOptions sdkOptions)
     {
 
         // Remove any existing registrations that might conflict
@@ -73,22 +73,24 @@ public static class ServiceCollectionExtensions
             services.Remove(descriptor);
         }
 
-        // Register ModelHubOptions with correct path
+        // Register ModelHubOptions with DataPath and ModelsDirectory from SDK options
         services.AddSingleton<IOptions<ModelHubOptions>>(provider =>
         {
             return Microsoft.Extensions.Options.Options.Create(new ModelHubOptions
             {
-                DataPath = modelsPath
+                DataPath = sdkOptions.DataPath,
+                ModelsDirectory = sdkOptions.ModelsDirectory
             });
         });
 
-        // Register model repository with explicit DataPath injection
+        // Register model repository with explicit options injection
         services.AddSingleton<IModelRepository>(provider =>
         {
             var logger = provider.GetRequiredService<ILogger<FileSystemModelRepository>>();
             var options = Microsoft.Extensions.Options.Options.Create(new ModelHubOptions
             {
-                DataPath = modelsPath
+                DataPath = sdkOptions.DataPath,
+                ModelsDirectory = sdkOptions.ModelsDirectory
             });
             return new FileSystemModelRepository(options, logger);
         });
@@ -98,7 +100,8 @@ public static class ServiceCollectionExtensions
             var logger = provider.GetRequiredService<ILogger<FileSystemModelRepository>>();
             var options = Microsoft.Extensions.Options.Options.Create(new ModelHubOptions
             {
-                DataPath = modelsPath
+                DataPath = sdkOptions.DataPath,
+                ModelsDirectory = sdkOptions.ModelsDirectory
             });
             return new FileSystemModelRepository(options, logger);
         });

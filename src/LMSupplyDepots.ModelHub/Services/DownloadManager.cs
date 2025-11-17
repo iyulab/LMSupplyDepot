@@ -8,7 +8,7 @@ public sealed class DownloadManager : IDisposable
     private readonly ILogger<DownloadManager> _logger;
     private readonly IEnumerable<IModelDownloader> _downloaders;
     private readonly SemaphoreSlim _downloadSemaphore;
-    private readonly string _dataPath;
+    private readonly string _modelsPath;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _activeCancellations = new();
     private bool _disposed;
 
@@ -19,7 +19,7 @@ public sealed class DownloadManager : IDisposable
     {
         _logger = logger;
         _downloaders = downloaders;
-        _dataPath = options.Value.DataPath;
+        _modelsPath = options.Value.GetModelsDirectory();
         _downloadSemaphore = new SemaphoreSlim(options.Value.MaxConcurrentDownloads);
     }
 
@@ -142,7 +142,7 @@ public sealed class DownloadManager : IDisposable
     /// </summary>
     public ModelDownloadProgress? GetDownloadProgress(string sourceId)
     {
-        var progress = DownloadStateHelper.GetRealTimeProgress(sourceId, _dataPath);
+        var progress = DownloadStateHelper.GetRealTimeProgress(sourceId, _modelsPath);
 
         if (progress != null && _activeCancellations.ContainsKey(sourceId))
         {
@@ -171,12 +171,12 @@ public sealed class DownloadManager : IDisposable
             });
         }
 
-        var states = DownloadStateHelper.FindDownloadStatesInDataPath("", _dataPath);
+        var states = DownloadStateHelper.FindDownloadStatesInModelsPath("", _modelsPath);
         foreach (var state in states)
         {
             if (!_activeCancellations.ContainsKey(state.ModelId))
             {
-                var progress = DownloadStateHelper.GetRealTimeProgress(state.ModelId, _dataPath);
+                var progress = DownloadStateHelper.GetRealTimeProgress(state.ModelId, _modelsPath);
                 downloads.Add(new DownloadInfo
                 {
                     ModelId = state.ModelId,

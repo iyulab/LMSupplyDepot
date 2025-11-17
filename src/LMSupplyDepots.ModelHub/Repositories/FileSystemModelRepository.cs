@@ -7,7 +7,7 @@ namespace LMSupplyDepots.ModelHub.Repositories;
 /// </summary>
 public class FileSystemModelRepository : IModelRepository, IDisposable
 {
-    private readonly string _baseDirectory;
+    private readonly string _modelsDirectory;
     private readonly ILogger<FileSystemModelRepository> _logger;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
@@ -23,13 +23,15 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
         IOptions<ModelHubOptions> options,
         ILogger<FileSystemModelRepository> logger)
     {
-        _baseDirectory = options.Value.DataPath;
+        _modelsDirectory = options.Value.GetModelsDirectory();
         _logger = logger;
 
-        _logger.LogInformation("FileSystemModelRepository initialized with DataPath: {DataPath}", _baseDirectory);
+        _logger.LogInformation(
+            "FileSystemModelRepository initialized with ModelsDirectory: {ModelsDirectory} (DataPath: {DataPath}, ModelsDirectory override: {ModelsDirectoryOverride})",
+            _modelsDirectory, options.Value.DataPath, options.Value.ModelsDirectory ?? "(none)");
 
-        // Ensure base directories exist
-        FileSystemHelper.EnsureBaseDirectoriesExists(_baseDirectory);
+        // Ensure models directory exists
+        FileSystemHelper.EnsureModelsDirectoryExists(_modelsDirectory);
     }
 
     /// <summary>
@@ -116,10 +118,10 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
             var modelId = ModelIdentifier.FromLMModel(model);
 
             // Ensure directories exist
-            FileSystemHelper.EnsureModelDirectoriesExist(modelId, _baseDirectory);
+            FileSystemHelper.EnsureModelDirectoriesExist(modelId, _modelsDirectory);
 
             // Get metadata file path
-            var metadataFilePath = FileSystemHelper.GetMetadataFilePath(modelId, _baseDirectory);
+            var metadataFilePath = FileSystemHelper.GetMetadataFilePath(modelId, _modelsDirectory);
 
             // Update model's ID if not already in canonical form
             if (model.Id != modelId.ToString())
@@ -131,10 +133,10 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
             var json = JsonHelper.Serialize(model);
             await File.WriteAllTextAsync(metadataFilePath, json, cancellationToken);
 
-            // Update the LocalPath 
+            // Update the LocalPath
             if (string.IsNullOrEmpty(model.LocalPath) || !Directory.Exists(model.LocalPath))
             {
-                model.LocalPath = FileSystemHelper.GetModelDirectoryPath(modelId, _baseDirectory);
+                model.LocalPath = FileSystemHelper.GetModelDirectoryPath(modelId, _modelsDirectory);
             }
 
             _logger.LogInformation("Saved model metadata for {ModelId} to {FilePath}", model.Id, metadataFilePath);
@@ -173,7 +175,7 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
 
             // Create a ModelIdentifier and get model directory path
             var identifier = ModelIdentifier.FromLMModel(model);
-            var modelDirPath = FileSystemHelper.GetModelDirectoryPath(identifier, _baseDirectory);
+            var modelDirPath = FileSystemHelper.GetModelDirectoryPath(identifier, _modelsDirectory);
 
             // Delete model directory
             if (Directory.Exists(modelDirPath))
@@ -218,7 +220,7 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
     /// </summary>
     public string GetModelDirectoryPath(string modelId, ModelType modelType)
     {
-        return FileSystemHelper.GetModelDirectoryPath(modelId, modelType, _baseDirectory);
+        return FileSystemHelper.GetModelDirectoryPath(modelId, modelType, _modelsDirectory);
     }
 
     /// <summary>
@@ -230,10 +232,10 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
 
         try
         {
-            _logger.LogDebug("Scanning models in {BaseDir}", _baseDirectory);
+            _logger.LogDebug("Scanning models in {ModelsDirectory}", _modelsDirectory);
 
             // Use the helper to find all metadata files
-            var metadataFiles = FileSystemHelper.FindAllModelMetadataFiles(_baseDirectory);
+            var metadataFiles = FileSystemHelper.FindAllModelMetadataFiles(_modelsDirectory);
 
             foreach (var metadataFile in metadataFiles)
             {
@@ -264,7 +266,7 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
             // Try to parse as a model identifier and load from file
             if (ModelIdentifier.TryParse(idOrAlias, out var identifier))
             {
-                var metadataFilePath = FileSystemHelper.GetMetadataFilePath(identifier, _baseDirectory);
+                var metadataFilePath = FileSystemHelper.GetMetadataFilePath(identifier, _modelsDirectory);
 
                 if (File.Exists(metadataFilePath))
                 {

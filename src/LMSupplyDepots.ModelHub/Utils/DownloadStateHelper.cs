@@ -74,11 +74,12 @@ internal static class DownloadStateHelper
     /// <summary>
     /// Gets real-time progress by comparing actual file size with expected size
     /// </summary>
-    public static ModelDownloadProgress? GetRealTimeProgress(string sourceId, string dataPath)
+    /// <param name="sourceId">The source ID of the model being downloaded</param>
+    /// <param name="modelsPath">The models directory path (not the base data path)</param>
+    public static ModelDownloadProgress? GetRealTimeProgress(string sourceId, string modelsPath)
     {
         try
         {
-            var modelsPath = Path.Combine(dataPath, "models");
             if (!Directory.Exists(modelsPath)) return null;
 
             long totalDownloaded = 0;
@@ -246,12 +247,13 @@ internal static class DownloadStateHelper
     }
 
     /// <summary>
-    /// Finds download states in data path
+    /// Finds download states in models directory
     /// </summary>
-    public static List<DownloadState> FindDownloadStatesInDataPath(string sourceId, string dataPath)
+    /// <param name="sourceId">The source ID to filter by, or empty/null for all states</param>
+    /// <param name="modelsPath">The models directory path (not the base data path)</param>
+    public static List<DownloadState> FindDownloadStatesInModelsPath(string sourceId, string modelsPath)
     {
         var states = new List<DownloadState>();
-        var modelsPath = Path.Combine(dataPath, "models");
         if (!Directory.Exists(modelsPath)) return states;
 
         foreach (var collectionDir in Directory.GetDirectories(modelsPath))

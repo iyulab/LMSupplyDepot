@@ -32,49 +32,48 @@ public static class FileSystemHelper
     /// <summary>
     /// Gets the model directory path based on collection ID
     /// </summary>
-    public static string GetModelDirectoryPath(string collectionId, string basePath)
+    public static string GetModelDirectoryPath(string collectionId, string modelsPath)
     {
         if (string.IsNullOrWhiteSpace(collectionId))
         {
             throw new ArgumentException("Collection ID cannot be empty", nameof(collectionId));
         }
 
-        return Path.Combine(basePath, "models", collectionId.ToFileNameSafe());
+        return Path.Combine(modelsPath, collectionId.ToFileNameSafe());
     }
 
     /// <summary>
     /// Gets the model directory path for a model identifier
     /// </summary>
-    public static string GetModelDirectoryPath(ModelIdentifier modelId, string basePath)
+    public static string GetModelDirectoryPath(ModelIdentifier modelId, string modelsPath)
     {
-        return GetModelDirectoryPath(modelId.CollectionId, basePath);
+        return GetModelDirectoryPath(modelId.CollectionId, modelsPath);
     }
 
     /// <summary>
     /// Gets the model directory path for a model (legacy support)
     /// </summary>
-    public static string GetModelDirectoryPath(string modelId, ModelType modelType, string basePath)
+    public static string GetModelDirectoryPath(string modelId, ModelType modelType, string modelsPath)
     {
         if (ModelIdentifier.TryParse(modelId, out var identifier))
         {
-            return GetModelDirectoryPath(identifier, basePath);
+            return GetModelDirectoryPath(identifier, modelsPath);
         }
 
         // Legacy fallback
-        return GetModelDirectoryPath(modelId, basePath);
+        return GetModelDirectoryPath(modelId, modelsPath);
     }
 
     /// <summary>
     /// Gets information about the directory structure for a model
     /// </summary>
-    public static ModelFileStructure GetModelFileStructure(ModelIdentifier modelId, string basePath)
+    public static ModelFileStructure GetModelFileStructure(ModelIdentifier modelId, string modelsPath)
     {
-        var modelsPath = Path.Combine(basePath, "models");
         var collectionPath = Path.Combine(modelsPath, modelId.CollectionId.ToFileNameSafe());
 
         return new ModelFileStructure
         {
-            BasePath = basePath,
+            BasePath = Path.GetDirectoryName(modelsPath) ?? modelsPath,
             ModelsPath = modelsPath,
             ModelNamePath = collectionPath,
 
@@ -91,9 +90,9 @@ public static class FileSystemHelper
     /// <summary>
     /// Gets the download status file path for a model artifact
     /// </summary>
-    public static string GetDownloadStatusFilePath(ModelIdentifier modelId, string basePath)
+    public static string GetDownloadStatusFilePath(ModelIdentifier modelId, string modelsPath)
     {
-        var structure = GetModelFileStructure(modelId, basePath);
+        var structure = GetModelFileStructure(modelId, modelsPath);
         var fileName = $"{modelId.ArtifactName}{DownloadStatusFileExtension}";
         return Path.Combine(structure.ModelNamePath, fileName);
     }
@@ -101,9 +100,9 @@ public static class FileSystemHelper
     /// <summary>
     /// Gets the path to the metadata file for a model
     /// </summary>
-    public static string GetMetadataFilePath(ModelIdentifier modelId, string basePath)
+    public static string GetMetadataFilePath(ModelIdentifier modelId, string modelsPath)
     {
-        var structure = GetModelFileStructure(modelId, basePath);
+        var structure = GetModelFileStructure(modelId, modelsPath);
         string fileName = $"{modelId.ArtifactName}{MetadataFileExtension}";
         return Path.Combine(structure.ModelNamePath, fileName);
     }
@@ -111,18 +110,18 @@ public static class FileSystemHelper
     /// <summary>
     /// Gets the path to the metadata file for a collection and artifact
     /// </summary>
-    public static string GetMetadataFilePath(string collectionId, string artifactName, string basePath)
+    public static string GetMetadataFilePath(string collectionId, string artifactName, string modelsPath)
     {
-        var collectionPath = GetModelDirectoryPath(collectionId, basePath);
+        var collectionPath = GetModelDirectoryPath(collectionId, modelsPath);
         return Path.Combine(collectionPath, $"{artifactName}{MetadataFileExtension}");
     }
 
     /// <summary>
     /// Creates all necessary directories for a model
     /// </summary>
-    public static void EnsureModelDirectoriesExist(ModelIdentifier modelId, string basePath)
+    public static void EnsureModelDirectoriesExist(ModelIdentifier modelId, string modelsPath)
     {
-        var structure = GetModelFileStructure(modelId, basePath);
+        var structure = GetModelFileStructure(modelId, modelsPath);
         Directory.CreateDirectory(structure.ModelsPath);
         Directory.CreateDirectory(structure.ModelNamePath);
     }
@@ -130,22 +129,19 @@ public static class FileSystemHelper
     /// <summary>
     /// Creates all necessary directories for a collection
     /// </summary>
-    public static void EnsureModelDirectoriesExist(string collectionId, string basePath)
+    public static void EnsureModelDirectoriesExist(string collectionId, string modelsPath)
     {
-        var modelsPath = Path.Combine(basePath, "models");
-        var collectionPath = GetModelDirectoryPath(collectionId, basePath);
-
+        var collectionPath = GetModelDirectoryPath(collectionId, modelsPath);
         Directory.CreateDirectory(modelsPath);
         Directory.CreateDirectory(collectionPath);
     }
 
     /// <summary>
-    /// Ensures base directories exist
+    /// Ensures the models directory exists
     /// </summary>
-    public static void EnsureBaseDirectoriesExists(string basePath)
+    public static void EnsureModelsDirectoryExists(string modelsPath)
     {
-        Directory.CreateDirectory(basePath);
-        Directory.CreateDirectory(Path.Combine(basePath, "models"));
+        Directory.CreateDirectory(modelsPath);
     }
 
     /// <summary>
@@ -260,9 +256,8 @@ public static class FileSystemHelper
     /// <summary>
     /// Scans for all model metadata files in the models directory
     /// </summary>
-    public static IEnumerable<string> FindAllModelMetadataFiles(string basePath)
+    public static IEnumerable<string> FindAllModelMetadataFiles(string modelsPath)
     {
-        var modelsPath = Path.Combine(basePath, "models");
         if (!Directory.Exists(modelsPath))
         {
             yield break;
@@ -282,9 +277,8 @@ public static class FileSystemHelper
     /// <summary>
     /// Gets collection ID from a metadata file path
     /// </summary>
-    public static string? GetCollectionIdFromMetadataPath(string metadataFilePath, string basePath)
+    public static string? GetCollectionIdFromMetadataPath(string metadataFilePath, string modelsPath)
     {
-        var modelsPath = Path.Combine(basePath, "models");
         var relativePath = Path.GetRelativePath(modelsPath, metadataFilePath);
 
         var pathParts = relativePath.Split(Path.DirectorySeparatorChar);

@@ -6,11 +6,20 @@ namespace LMSupplyDepots.SDK;
 public class LMSupplyDepotOptions
 {
     /// <summary>
-    /// The directory where models are stored
+    /// The base directory for application data.
+    /// If ModelsDirectory is not set, models will be stored in {DataPath}/models.
     /// </summary>
     public string DataPath { get; set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "LMSupplyDepots");
+
+    /// <summary>
+    /// The directory where models are actually stored.
+    /// When set, this path is used directly without appending "models" subdirectory.
+    /// When null, defaults to {DataPath}/models for backward compatibility.
+    /// This can be configured via environment variable: LMSupplyDepots__ModelsDirectory
+    /// </summary>
+    public string? ModelsDirectory { get; set; }
 
     /// <summary>
     /// The maximum number of concurrent downloads

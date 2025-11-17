@@ -451,8 +451,8 @@ public class V1Controller : ControllerBase
 
             // Set streaming response headers
             Response.ContentType = "text/event-stream";
-            Response.Headers.Add("Cache-Control", "no-cache");
-            Response.Headers.Add("Connection", "keep-alive");
+            Response.Headers["Cache-Control"] = "no-cache";
+            Response.Headers["Connection"] = "keep-alive";
 
             var completionId = $"chatcmpl-{Guid.NewGuid():N}";
             var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();

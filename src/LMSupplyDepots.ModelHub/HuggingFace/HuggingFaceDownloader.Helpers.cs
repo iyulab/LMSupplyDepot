@@ -57,7 +57,8 @@ public partial class HuggingFaceDownloader
             var files = HuggingFaceHelper.FindArtifactFiles(hfModel, artifactName);
             if (files.Count == 0)
             {
-                files.Add($"{artifactName}.gguf");
+                // Use helper method to ensure .gguf extension without duplication
+                files.Add(HuggingFaceHelper.EnsureGgufExtension(artifactName));
             }
             return files;
         }
@@ -89,7 +90,7 @@ public partial class HuggingFaceDownloader
     {
         try
         {
-            return await _client.Value.FindModelByRepoIdAsync(repoId, cancellationToken);
+            return await _client.FindModelByRepoIdAsync(repoId, cancellationToken);
         }
         catch (HuggingFaceException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
         {

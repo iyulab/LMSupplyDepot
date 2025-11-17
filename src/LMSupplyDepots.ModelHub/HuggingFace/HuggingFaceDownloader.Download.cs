@@ -42,7 +42,7 @@ public partial class HuggingFaceDownloader
             var model = HuggingFaceHelper.ConvertToLMModel(hfModel);
 
             // Get actual file sizes from repository
-            var repositoryFileSizes = await _client.Value.GetRepositoryFileSizesAsync(repoId, cancellationToken);
+            var repositoryFileSizes = await _client.GetRepositoryFileSizesAsync(repoId, cancellationToken);
 
             // Determine what file(s) to download
             var filesToDownload = GetFilesToDownload(hfModel, artifactName, sourceId);
@@ -116,7 +116,8 @@ public partial class HuggingFaceDownloader
         var filesToDownload = HuggingFaceHelper.FindArtifactFiles(hfModel, artifactName);
         if (filesToDownload.Count == 0)
         {
-            var exactFilename = $"{artifactName}.gguf";
+            // Use helper method to ensure .gguf extension without duplication
+            var exactFilename = HuggingFaceHelper.EnsureGgufExtension(artifactName);
             _logger.LogInformation("No matching files found, trying exact filename: {Filename}", exactFilename);
             filesToDownload.Add(exactFilename);
         }
@@ -142,7 +143,7 @@ public partial class HuggingFaceDownloader
     {
         _logger.LogInformation("Downloading entire repository: {RepoId}", repoId);
 
-        await foreach (var _ in _client.Value.DownloadRepositoryAsync(
+        await foreach (var _ in _client.DownloadRepositoryAsync(
             repoId, targetDirectory, false, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -183,7 +184,7 @@ public partial class HuggingFaceDownloader
                 cancellationToken.ThrowIfCancellationRequested();
             });
 
-            var result = await _client.Value.DownloadFileWithResultAsync(
+            var result = await _client.DownloadFileWithResultAsync(
                 repoId,
                 fileName,
                 outputPath,

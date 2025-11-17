@@ -209,7 +209,7 @@ public partial class HuggingFaceDownloader
             });
 
             // Resume download from current position
-            var result = await _client.Value.DownloadFileWithResultAsync(
+            var result = await _client.DownloadFileWithResultAsync(
                 repoId,
                 fileName,
                 outputPath,

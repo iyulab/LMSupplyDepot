@@ -170,13 +170,13 @@ public partial class HuggingFaceDownloader
 
         try
         {
-            var hfModel = await _client.Value.FindModelByRepoIdAsync(collectionId, cancellationToken);
+            var hfModel = await _client.FindModelByRepoIdAsync(collectionId, cancellationToken);
 
             // Get actual file sizes from repository for detailed info
             Dictionary<string, long>? repositoryFileSizes = null;
             try
             {
-                repositoryFileSizes = await _client.Value.GetRepositoryFileSizesAsync(collectionId, cancellationToken);
+                repositoryFileSizes = await _client.GetRepositoryFileSizesAsync(collectionId, cancellationToken);
                 _logger.LogInformation("Retrieved actual file sizes for {Count} files in {CollectionId}",
                     repositoryFileSizes.Count, collectionId);
             }
@@ -220,20 +220,20 @@ public partial class HuggingFaceDownloader
 
             if (type == ModelType.TextGeneration)
             {
-                results = await _client.Value.SearchTextGenerationModelsAsync(
+                results = await _client.SearchTextGenerationModelsAsync(
                     searchTerm, null, limit, sort, true, cancellationToken);
             }
             else if (type == ModelType.Embedding)
             {
-                results = await _client.Value.SearchEmbeddingModelsAsync(
+                results = await _client.SearchEmbeddingModelsAsync(
                     searchTerm, null, limit, sort, true, cancellationToken);
             }
             else
             {
-                var textGenResults = await _client.Value.SearchTextGenerationModelsAsync(
+                var textGenResults = await _client.SearchTextGenerationModelsAsync(
                     searchTerm, null, limit / 2, sort, true, cancellationToken);
 
-                var embeddingResults = await _client.Value.SearchEmbeddingModelsAsync(
+                var embeddingResults = await _client.SearchEmbeddingModelsAsync(
                     searchTerm, null, limit / 2, sort, true, cancellationToken);
 
                 results = [.. textGenResults.Concat(embeddingResults)

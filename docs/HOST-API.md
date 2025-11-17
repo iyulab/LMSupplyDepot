@@ -115,6 +115,25 @@ LMSupplyDepots Host 애플리케이션의 REST API 사용법을 설명합니다.
 }
 ```
 
+**모델 ID 형식 (HuggingFace)**:
+- 전체 저장소: `hf:owner/repo`
+- 특정 아티팩트: `hf:owner/repo/artifact-name`
+
+**아티팩트 이름 규칙**:
+- `.gguf` 확장자는 선택사항입니다 (자동으로 처리됨)
+- ✅ 올바른 형식: `hf:bartowski/Phi-4-GGUF/Phi-4-Q2_K` (확장자 없음)
+- ✅ 올바른 형식: `hf:bartowski/Phi-4-GGUF/Phi-4-Q2_K.gguf` (확장자 포함)
+- 두 형식 모두 동일하게 처리됩니다
+
+**예시**:
+```json
+// 확장자 없이
+{ "model": "hf:bartowski/microsoft_Phi-4-mini-instruct-GGUF/Phi-4-mini-instruct-Q2_K" }
+
+// 확장자 포함 (v0.3.1+ 지원)
+{ "model": "hf:bartowski/microsoft_Phi-4-mini-instruct-GGUF/Phi-4-mini-instruct-Q2_K.gguf" }
+```
+
 ### 다운로드 일시정지
 **POST** `/api/downloads/pause`
 ```json

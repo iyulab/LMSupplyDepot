@@ -575,28 +575,33 @@ public static class HuggingFaceHelper
 
         var allFiles = model.GetModelWeightPaths();
 
+        // Normalize artifact name by removing .gguf extension if present
+        // This allows matching whether user provides "artifact" or "artifact.gguf"
+        var normalizedArtifactName = RemoveGgufExtension(artifactName);
+
         var exactMatches = allFiles.Where(f =>
-            Path.GetFileNameWithoutExtension(f).Equals(artifactName, StringComparison.OrdinalIgnoreCase))
+            Path.GetFileNameWithoutExtension(f).Equals(normalizedArtifactName, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         if (exactMatches.Count > 0)
             return exactMatches;
 
         var startingMatches = allFiles.Where(f =>
-            Path.GetFileNameWithoutExtension(f).StartsWith(artifactName, StringComparison.OrdinalIgnoreCase))
+            Path.GetFileNameWithoutExtension(f).StartsWith(normalizedArtifactName, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         if (startingMatches.Count > 0)
             return startingMatches;
 
         var containingMatches = allFiles.Where(f =>
-            Path.GetFileNameWithoutExtension(f).Contains(artifactName, StringComparison.OrdinalIgnoreCase))
+            Path.GetFileNameWithoutExtension(f).Contains(normalizedArtifactName, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         if (containingMatches.Count > 0)
             return containingMatches;
 
-        return new List<string> { $"{artifactName}.gguf" };
+        // Use helper method to ensure .gguf extension without duplication
+        return new List<string> { EnsureGgufExtension(normalizedArtifactName) };
     }
 
     /// <summary>
@@ -936,6 +941,36 @@ public static class HuggingFaceHelper
                extension == ".ggml" ||
                extension == ".pt" ||
                extension == ".pth";
+    }
+
+    /// <summary>
+    /// Ensures artifact name has .gguf extension (adds if missing, doesn't duplicate)
+    /// </summary>
+    /// <param name="artifactName">The artifact name to process</param>
+    /// <returns>Artifact name with .gguf extension</returns>
+    public static string EnsureGgufExtension(string artifactName)
+    {
+        if (string.IsNullOrEmpty(artifactName))
+            return artifactName;
+
+        return artifactName.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase)
+            ? artifactName
+            : $"{artifactName}.gguf";
+    }
+
+    /// <summary>
+    /// Removes .gguf extension if present
+    /// </summary>
+    /// <param name="artifactName">The artifact name to process</param>
+    /// <returns>Artifact name without .gguf extension</returns>
+    public static string RemoveGgufExtension(string artifactName)
+    {
+        if (string.IsNullOrEmpty(artifactName))
+            return artifactName;
+
+        return artifactName.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase)
+            ? artifactName.Substring(0, artifactName.Length - 5)
+            : artifactName;
     }
 
     // Keep existing method as alias for backward compatibility

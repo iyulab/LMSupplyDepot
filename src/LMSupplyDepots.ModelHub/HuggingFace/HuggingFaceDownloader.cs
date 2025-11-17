@@ -4,15 +4,15 @@ namespace LMSupplyDepots.ModelHub.HuggingFace;
 
 /// <summary>
 /// Implementation of IModelDownloader for Hugging Face models
+/// Refactored to use dependency injection for testability
 /// </summary>
 public partial class HuggingFaceDownloader : IModelDownloader, IDisposable
 {
     private readonly HuggingFaceDownloaderOptions _options;
     private readonly ModelHubOptions _hubOptions;
     private readonly ILogger<HuggingFaceDownloader> _logger;
-    private readonly ILoggerFactory _loggerFactory;
     private readonly FileSystemModelRepository _fileSystemRepository;
-    private readonly Lazy<HuggingFaceClient> _client;
+    private readonly IHuggingFaceClient _client;
     private bool _disposed;
 
     private static readonly Regex _sourceIdRegex = new(@"^(hf|huggingface):(.+)$", RegexOptions.IgnoreCase);
@@ -20,22 +20,34 @@ public partial class HuggingFaceDownloader : IModelDownloader, IDisposable
     public string SourceName => "HuggingFace";
 
     /// <summary>
-    /// Initializes a new instance of the HuggingFaceDownloader
+    /// Initializes a new instance of the HuggingFaceDownloader with dependency injection
     /// </summary>
+    public HuggingFaceDownloader(
+        IOptions<HuggingFaceDownloaderOptions> options,
+        IOptions<ModelHubOptions> hubOptions,
+        ILogger<HuggingFaceDownloader> logger,
+        IHuggingFaceClient client,
+        FileSystemModelRepository fileSystemRepository)
+    {
+        _options = options.Value;
+        _hubOptions = hubOptions.Value;
+        _logger = logger;
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+        _fileSystemRepository = fileSystemRepository;
+    }
+
+    /// <summary>
+    /// Legacy constructor for backward compatibility - creates client internally
+    /// </summary>
+    [Obsolete("Use the constructor with IHuggingFaceClient injection for better testability")]
     public HuggingFaceDownloader(
         IOptions<HuggingFaceDownloaderOptions> options,
         IOptions<ModelHubOptions> hubOptions,
         ILogger<HuggingFaceDownloader> logger,
         ILoggerFactory loggerFactory,
         FileSystemModelRepository fileSystemRepository)
+        : this(options, hubOptions, logger, CreateClient(options.Value, loggerFactory), fileSystemRepository)
     {
-        _options = options.Value;
-        _hubOptions = hubOptions.Value;
-        _logger = logger;
-        _loggerFactory = loggerFactory;
-        _fileSystemRepository = fileSystemRepository;
-
-        _client = new Lazy<HuggingFaceClient>(() => CreateClient());
     }
 
     /// <summary>
@@ -56,28 +68,29 @@ public partial class HuggingFaceDownloader : IModelDownloader, IDisposable
     }
 
     /// <summary>
-    /// Creates a HuggingFaceClient with the configured options
+    /// Creates a HuggingFaceClient with the configured options (static factory method)
     /// </summary>
-    private HuggingFaceClient CreateClient()
+    private static HuggingFaceClient CreateClient(HuggingFaceDownloaderOptions options, ILoggerFactory loggerFactory)
     {
         var clientOptions = new HuggingFaceClientOptions
         {
-            Token = string.IsNullOrWhiteSpace(_options.ApiToken) ? null : _options.ApiToken,
-            MaxConcurrentDownloads = _options.MaxConcurrentFileDownloads,
-            Timeout = _options.RequestTimeout,
-            MaxRetries = _options.MaxRetries
+            Token = string.IsNullOrWhiteSpace(options.ApiToken) ? null : options.ApiToken,
+            MaxConcurrentDownloads = options.MaxConcurrentFileDownloads,
+            Timeout = options.RequestTimeout,
+            MaxRetries = options.MaxRetries
         };
 
-        if (string.IsNullOrWhiteSpace(_options.ApiToken))
+        var logger = loggerFactory?.CreateLogger<HuggingFaceDownloader>();
+        if (string.IsNullOrWhiteSpace(options.ApiToken))
         {
-            _logger.LogInformation("HuggingFace API token not provided. Only public models will be accessible.");
+            logger?.LogInformation("HuggingFace API token not provided. Only public models will be accessible.");
         }
         else
         {
-            _logger.LogInformation("HuggingFace API token configured. Public and private models will be accessible.");
+            logger?.LogInformation("HuggingFace API token configured. Public and private models will be accessible.");
         }
 
-        return new HuggingFaceClient(clientOptions, _loggerFactory);
+        return new HuggingFaceClient(clientOptions, loggerFactory);
     }
 
     /// <summary>
@@ -100,10 +113,7 @@ public partial class HuggingFaceDownloader : IModelDownloader, IDisposable
         {
             if (disposing)
             {
-                if (_client.IsValueCreated)
-                {
-                    _client.Value.Dispose();
-                }
+                _client?.Dispose();
             }
 
             _disposed = true;

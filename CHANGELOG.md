@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.3.1] - 2025-11-17
+
+### Fixed
+- **HuggingFace double extension bug**: Fixed issue where artifact names with `.gguf` extension resulted in duplicate extensions
+  - Root cause: `HuggingFaceHelper.FindArtifactFiles()` and related methods unconditionally appended `.gguf` extension
+  - Impact: Users providing artifact names like `Phi-4-mini-instruct-Q2_K.gguf` experienced 404 download failures
+  - Example: `Phi-4-mini-instruct-Q2_K.gguf` → incorrectly became `Phi-4-mini-instruct-Q2_K.gguf.gguf`
+  - Solution: Added `EnsureGgufExtension()` and `RemoveGgufExtension()` helper methods for idempotent extension handling
+  - Locations fixed: `HuggingFaceHelper.cs`, `HuggingFaceDownloader.Download.cs`, `HuggingFaceDownloader.Helpers.cs`
+- **Test infrastructure bug fixes**:
+  - Fixed PowerShell script parameter conflict: Renamed `$Verbose` to `$DetailedOutput` to avoid built-in parameter collision
+  - Fixed `HuggingFaceDownloaderIntegrationTests` constructor: API token now accepts `null` instead of empty string for public models
+  - All 13 LocalIntegration tests now pass successfully (6 HuggingFace + 7 LLamaEngine tests)
+
+### Changed
+- **Testability improvements**: Refactored `HuggingFaceDownloader` for dependency injection and testability
+  - Refactored `HuggingFaceDownloader` to use `IHuggingFaceClient` interface instead of concrete class
+  - Added DI support in `HuggingFaceExtensions` with automatic client factory registration
+  - Maintained backward compatibility with legacy constructor (marked as obsolete)
+  - Enables mock-based unit testing without external API dependencies
+
+### Added
+- **Test infrastructure**: Comprehensive test categorization and CICD optimization
+  - Three-tier test categories: `Unit` (fast, mocked), `Integration` (local resources), `LocalIntegration` (external APIs)
+  - Integration tests for HuggingFace download scenarios with real API calls
+  - Test scripts: `run-all-tests.ps1` (all tests) and `run-cicd-tests.ps1` (fast tests only)
+  - CICD workflow excludes `LocalIntegration` tests for faster pipeline execution (181 tests in ~5 seconds)
+  - Documentation: Added `BUILD.md` with comprehensive build and test guidelines
+
 ## [0.3.0] - 2025-11-17
 
 ### 🔥 Breaking Changes

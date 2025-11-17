@@ -19,7 +19,7 @@ public sealed class DownloadManager : IDisposable
     {
         _logger = logger;
         _downloaders = downloaders;
-        _modelsPath = options.Value.GetModelsDirectory();
+        _modelsPath = options.Value.ModelsDirectory;
         _downloadSemaphore = new SemaphoreSlim(options.Value.MaxConcurrentDownloads);
     }
 

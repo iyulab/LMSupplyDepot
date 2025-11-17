@@ -7,47 +7,128 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.0] - 2025-11-17
 
-### Added
-- **ModelsDirectory option** in `ModelHubOptions` and `LMSupplyDepotOptions` for explicit model storage path configuration
-  - Allows direct specification of model directory without automatic `\models` subdirectory appending
-  - Supports environment variable: `LMSupplyDepots__ModelsDirectory`
-  - Backward compatible: defaults to `{DataPath}/models` when not set
+### 🔥 Breaking Changes
+
+**Simplified configuration model** - Removed the confusing dual-concept of `DataPath` and `ModelsDirectory`
+
+**Before (v0.2.x):**
+```csharp
+var options = new LMSupplyDepotOptions
+{
+    DataPath = @"C:\Users\xxx\AppData\Local\LMSupplyDepots"
+    // Models stored at: DataPath + "\models"
+};
+```
+
+**After (v0.3.0):**
+```csharp
+var options = new LMSupplyDepotOptions
+{
+    ModelsDirectory = @"C:\Users\xxx\.filer\models"  // Direct path
+};
+```
 
 ### Fixed
-- **Model discovery bug**: Fixed issue where `DataPath` automatically appended `\models` subdirectory, causing model discovery to fail when users provided paths already ending with `\models` (e.g., `C:\Users\xxx\.filer\models` → incorrectly used as `C:\Users\xxx\.filer\models\models`)
-- Improved logging to show actual models directory being used for better debugging
+- **Model discovery bug**: Eliminated automatic `\models` subdirectory appending that caused double path issue
+  - Root cause: `FileSystemHelper` auto-appended `\models` to all paths
+  - Impact: Users providing paths ending with `\models` experienced discovery failures
+  - Example: `C:\Users\xxx\.filer\models` → incorrectly became `C:\Users\xxx\.filer\models\models`
 
 ### Changed
-- `FileSystemHelper` methods now use `modelsPath` parameter directly instead of auto-appending `\models`
-- `FileSystemModelRepository` now computes effective models directory using `ModelHubOptions.GetModelsDirectory()`
-- `DownloadManager` and related services updated to use models directory directly
-- Renamed `DownloadStateHelper.FindDownloadStatesInDataPath` → `FindDownloadStatesInModelsPath` for clarity
+- **Removed `DataPath` property** from `ModelHubOptions` and `LMSupplyDepotOptions`
+- **Renamed to `ModelsDirectory`** - clearer, single-purpose property
+- **Default value updated**: Now `%LocalAppData%/LMSupplyDepots/models` (includes "models" in default)
+- **Environment variable**: `LMSupplyDepots__ModelsDirectory` (was: `LMSupplyDepots__DataPath`)
+- **API Response**: `GET /api/system/config` now returns `ModelsDirectory` instead of `DataPath`
 
 ### Migration Guide
-For integrations experiencing the double `\models` path issue:
 
-**Before (workaround):**
+#### Code Changes Required
+
+**1. Update Options Configuration**
 ```csharp
-// Pass parent directory to compensate for auto-append
+// Before
 var options = new LMSupplyDepotOptions
 {
-    DataPath = Path.GetDirectoryName(modelsPath) // C:\Users\xxx\.filer
+    DataPath = @"C:\data\LMSupplyDepots"
+};
+
+// After
+var options = new LMSupplyDepotOptions
+{
+    ModelsDirectory = @"C:\data\LMSupplyDepots\models"
 };
 ```
 
-**After (recommended):**
-```csharp
-// Directly specify models directory
-var options = new LMSupplyDepotOptions
-{
-    ModelsDirectory = modelsPath // C:\Users\xxx\.filer\models
-};
-```
-
-**Or via environment variable:**
+**2. Update Environment Variables**
 ```bash
-set LMSupplyDepots__ModelsDirectory=C:\Users\xxx\.filer\models
+# Before
+set LMSupplyDepots__DataPath=C:\data\LMSupplyDepots
+
+# After
+set LMSupplyDepots__ModelsDirectory=C:\data\LMSupplyDepots\models
 ```
+
+**3. Update appsettings.json**
+```json
+{
+  "LMSupplyDepots": {
+    "ModelsDirectory": "C:\\data\\models"
+  }
+}
+```
+
+#### For Existing Users
+
+If you were using the **default path**, no action needed - models will be found at the same location.
+
+If you **explicitly set DataPath**:
+- Add `\models` to your path value
+- Or set `ModelsDirectory` to your existing models location
+
+#### For Integrations (like Filer)
+
+Remove the workaround and use explicit configuration:
+
+```csharp
+// Remove this workaround
+var parentPath = Path.GetDirectoryName(_currentModelsPath);
+["LMSupplyDepots__DataPath"] = parentPath
+
+// Use this instead
+["LMSupplyDepots__ModelsDirectory"] = _currentModelsPath
+```
+
+### Technical Details
+
+**Refactored Components:**
+- `FileSystemHelper`: All methods now use `modelsPath` parameter directly (no auto-append)
+- `FileSystemModelRepository`: Uses `ModelsDirectory` property directly
+- `DownloadManager`: Updated to use models directory without path manipulation
+- `HuggingFaceDownloader`: Simplified path handling
+- `SystemController`: API now exposes `ModelsDirectory` instead of `DataPath`
+
+**Improved Logging:**
+```
+FileSystemModelRepository initialized with ModelsDirectory: C:\Users\xxx\.filer\models
+```
+
+### Benefits
+
+1. **✅ Single Responsibility**: One property, one purpose - where models are stored
+2. **✅ No Surprises**: Path behavior is predictable and documented
+3. **✅ Clearer Intent**: `ModelsDirectory` vs ambiguous `DataPath`
+4. **✅ Simpler Code**: Removed `GetModelsDirectory()` helper and conditional logic
+5. **✅ Better Errors**: Clearer error messages about model paths
+
+### Rationale
+
+This is a **breaking change in 0.x**, but necessary for long-term maintainability:
+
+- **Design Flaw**: The `DataPath` + auto-append pattern violated the principle of least surprise
+- **User Confusion**: Users naturally expected `DataPath` to be the models directory
+- **Code Complexity**: Conditional logic (`GetModelsDirectory()`) added unnecessary complexity
+- **0.x Development**: Perfect time for breaking changes before 1.0 stabilization
 
 ## [0.2.2] - Earlier releases
 

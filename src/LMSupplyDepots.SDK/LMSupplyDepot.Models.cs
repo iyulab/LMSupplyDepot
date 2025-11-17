@@ -128,7 +128,7 @@ public partial class LMSupplyDepot
     {
         services.AddModelHub(options =>
         {
-            options.DataPath = modelsPath;
+            options.ModelsDirectory = modelsPath;
             options.MaxConcurrentDownloads = _options.MaxConcurrentDownloads;
             options.VerifyChecksums = _options.VerifyChecksums;
             options.MinimumFreeDiskSpace = _options.MinimumFreeDiskSpace;

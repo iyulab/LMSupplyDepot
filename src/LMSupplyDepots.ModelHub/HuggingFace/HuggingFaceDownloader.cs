@@ -85,7 +85,7 @@ public partial class HuggingFaceDownloader : IModelDownloader, IDisposable
     /// </summary>
     internal string GetModelDirectoryPath(ModelIdentifier identifier)
     {
-        return FileSystemHelper.GetModelDirectoryPath(identifier, _hubOptions.GetModelsDirectory());
+        return FileSystemHelper.GetModelDirectoryPath(identifier, _hubOptions.ModelsDirectory);
     }
 
     public void Dispose()

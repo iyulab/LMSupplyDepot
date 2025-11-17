@@ -61,7 +61,7 @@ public class SystemController : ControllerBase
         {
             var config = new SystemConfig
             {
-                DataPath = _options.DataPath,
+                ModelsDirectory = _options.ModelsDirectory,
                 MaxConcurrentDownloads = _options.MaxConcurrentDownloads,
                 MaxConcurrentOperations = _options.MaxConcurrentOperations,
                 EnableModelCaching = _options.EnableModelCaching,
@@ -103,7 +103,7 @@ public class HealthInfo
 /// </summary>
 public class SystemConfig
 {
-    public string DataPath { get; set; } = "";
+    public string ModelsDirectory { get; set; } = "";
     public int MaxConcurrentDownloads { get; set; }
     public int MaxConcurrentOperations { get; set; }
     public bool EnableModelCaching { get; set; }

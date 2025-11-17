@@ -51,7 +51,7 @@ public partial class LMSupplyDepot : IDisposable
         _serviceProvider = services.BuildServiceProvider();
 
         _logger.LogInformation("LMSupplyDepot initialized with models directory: {ModelsDirectory}",
-            _options.DataPath);
+            _options.ModelsDirectory);
     }
 
     /// <summary>
@@ -70,13 +70,13 @@ public partial class LMSupplyDepot : IDisposable
     private void ConfigureServices(IServiceCollection services)
     {
         // Ensure models directory exists
-        if (!Directory.Exists(_options.DataPath))
+        if (!Directory.Exists(_options.ModelsDirectory))
         {
-            Directory.CreateDirectory(_options.DataPath);
+            Directory.CreateDirectory(_options.ModelsDirectory);
         }
 
         // Configure ModelHub services
-        ConfigureModelHubServices(services, _options.DataPath);
+        ConfigureModelHubServices(services, _options.ModelsDirectory);
 
         // Configure Inference services
         ConfigureInferenceServices(services);

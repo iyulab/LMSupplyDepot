@@ -12,7 +12,7 @@ using var loggerFactory = LoggerFactory.Create(builder =>
 // Configure options
 var options = new LMSupplyDepotOptions
 {
-    DataPath = @"D:\filer-data"
+    ModelsDirectory = @"D:\filer-data\models"
 };
 
 // Create depot

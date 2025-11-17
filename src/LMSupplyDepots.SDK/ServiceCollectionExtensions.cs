@@ -24,13 +24,13 @@ public static class ServiceCollectionExtensions
         // Register options
         services.TryAddSingleton(Microsoft.Extensions.Options.Options.Create(options));
 
-        // Ensure data directory exists
-        if (!Directory.Exists(options.DataPath))
+        // Ensure models directory exists
+        if (!Directory.Exists(options.ModelsDirectory))
         {
-            Directory.CreateDirectory(options.DataPath);
+            Directory.CreateDirectory(options.ModelsDirectory);
         }
 
-        // Configure ModelHub services with full options
+        // Configure ModelHub services
         ConfigureModelHubServices(services, options);
 
         // Configure Inference services
@@ -73,12 +73,11 @@ public static class ServiceCollectionExtensions
             services.Remove(descriptor);
         }
 
-        // Register ModelHubOptions with DataPath and ModelsDirectory from SDK options
+        // Register ModelHubOptions with ModelsDirectory from SDK options
         services.AddSingleton<IOptions<ModelHubOptions>>(provider =>
         {
             return Microsoft.Extensions.Options.Options.Create(new ModelHubOptions
             {
-                DataPath = sdkOptions.DataPath,
                 ModelsDirectory = sdkOptions.ModelsDirectory
             });
         });
@@ -89,7 +88,6 @@ public static class ServiceCollectionExtensions
             var logger = provider.GetRequiredService<ILogger<FileSystemModelRepository>>();
             var options = Microsoft.Extensions.Options.Options.Create(new ModelHubOptions
             {
-                DataPath = sdkOptions.DataPath,
                 ModelsDirectory = sdkOptions.ModelsDirectory
             });
             return new FileSystemModelRepository(options, logger);
@@ -100,7 +98,6 @@ public static class ServiceCollectionExtensions
             var logger = provider.GetRequiredService<ILogger<FileSystemModelRepository>>();
             var options = Microsoft.Extensions.Options.Options.Create(new ModelHubOptions
             {
-                DataPath = sdkOptions.DataPath,
                 ModelsDirectory = sdkOptions.ModelsDirectory
             });
             return new FileSystemModelRepository(options, logger);

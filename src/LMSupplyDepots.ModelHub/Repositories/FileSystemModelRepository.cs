@@ -23,12 +23,12 @@ public class FileSystemModelRepository : IModelRepository, IDisposable
         IOptions<ModelHubOptions> options,
         ILogger<FileSystemModelRepository> logger)
     {
-        _modelsDirectory = options.Value.GetModelsDirectory();
+        _modelsDirectory = options.Value.ModelsDirectory;
         _logger = logger;
 
         _logger.LogInformation(
-            "FileSystemModelRepository initialized with ModelsDirectory: {ModelsDirectory} (DataPath: {DataPath}, ModelsDirectory override: {ModelsDirectoryOverride})",
-            _modelsDirectory, options.Value.DataPath, options.Value.ModelsDirectory ?? "(none)");
+            "FileSystemModelRepository initialized with ModelsDirectory: {ModelsDirectory}",
+            _modelsDirectory);
 
         // Ensure models directory exists
         FileSystemHelper.EnsureModelsDirectoryExists(_modelsDirectory);

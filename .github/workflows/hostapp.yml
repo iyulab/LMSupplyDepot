@@ -3,8 +3,11 @@ name: Build and Release
 
 on:
   push:
-    tags:
-      - 'hostapp_v*'
+    branches:
+      - main
+    paths:
+      - 'src/Directory.Build.props'
+  workflow_dispatch:
 
 jobs:
   build-and-release:
@@ -34,20 +37,23 @@ jobs:
       run: |
         dotnet publish src/LMSupplyDepots.HostApp/LMSupplyDepots.HostApp.csproj -c Release -o output/host-app
     
-    - name: Get version from tag
+    - name: Extract version from Directory.Build.props
       id: version
       run: |
-        $tag = $env:GITHUB_REF -replace 'refs/tags/', ''
-        if ($tag -match '^hostapp_v(.+)$') {
-          $version = $matches[1]
-        } elseif ($tag -match '^v(.+)$') {
-          $version = $matches[1]
-        } else {
-          $version = $tag
+        [xml]$buildProps = Get-Content "src/Directory.Build.props"
+        $version = $buildProps.Project.PropertyGroup.Version
+
+        if ([string]::IsNullOrEmpty($version)) {
+          Write-Error "Could not extract version from Directory.Build.props"
+          exit 1
         }
+
+        $tag = "v$version"
+
         echo "VERSION=$version" >> $env:GITHUB_OUTPUT
         echo "TAG=$tag" >> $env:GITHUB_OUTPUT
-        echo "Version: $version, Tag: $tag"
+        echo "Extracted Version: $version"
+        echo "Generated Tag: $tag"
       shell: powershell
       
     - name: Discover runtime platforms

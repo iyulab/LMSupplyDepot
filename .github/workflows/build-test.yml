@@ -12,7 +12,7 @@ on:
       - 'src/**'
 
 env:
-  DOTNET_VERSION: '9.0.x'
+  DOTNET_VERSION: '10.0.x'
   CI: true
   GITHUB_ACTIONS: true
 
@@ -55,18 +55,17 @@ jobs:
     - name: Restore dependencies
       run: |
         echo "⚠️ Building without LLamaSharp backend packages for CI compatibility"
-        echo "Temporarily disabling NU1507 warnings for CI build due to multiple package sources"
-        dotnet restore src/LMSupplyDepots.sln --verbosity normal --disable-parallel -p:WarningsNotAsErrors=NU1507
+        dotnet restore src/LMSupplyDepots.sln --verbosity normal --disable-parallel
       shell: powershell
 
     - name: Build solution
       run: |
         echo "Building all projects..."
-        dotnet build src/LMSupplyDepots.sln --configuration Release --no-restore --verbosity normal -p:WarningsNotAsErrors=NU1507
+        dotnet build src/LMSupplyDepots.sln --configuration Release --no-restore --verbosity normal
       shell: powershell
 
     - name: Run tests
       run: |
         echo "Running CI tests (excluding LocalIntegration tests)..."
-        dotnet test src/LMSupplyDepots.sln --configuration Release --no-build --verbosity normal --filter "Category!=LocalIntegration" -p:WarningsNotAsErrors=NU1507
+        dotnet test src/LMSupplyDepots.sln --configuration Release --no-build --verbosity normal --filter "Category!=LocalIntegration"
       shell: powershell

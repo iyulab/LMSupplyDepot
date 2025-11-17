@@ -95,7 +95,7 @@ Write-Host ""
 
 # Build solution first
 Write-Host "🔨 Building solution..." -ForegroundColor Cyan
-$buildResult = dotnet build --configuration Release --no-restore
+$buildResult = dotnet build src/LMSupplyDepots.sln --configuration Release --no-restore
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ Build failed" -ForegroundColor Red
     exit 1
@@ -115,7 +115,7 @@ foreach ($category in $LocalTestCategories) {
         $categoryFilter += "&$Filter"
     }
 
-    $testCommand = "dotnet test --configuration Release --no-build --logger `"console;verbosity=normal`" --filter `"$categoryFilter`""
+    $testCommand = "dotnet test src/LMSupplyDepots.sln --configuration Release --no-build --logger `"console;verbosity=normal`" --filter `"$categoryFilter`""
 
     if ($Verbose) {
         Write-Host "    Command: $testCommand" -ForegroundColor Gray

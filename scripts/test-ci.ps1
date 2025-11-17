@@ -44,7 +44,7 @@ Write-Host ""
 
 # Security scanning
 Write-Host "🛡️ Running security scan..." -ForegroundColor Cyan
-$auditResult = dotnet list package --vulnerable --include-transitive
+$auditResult = dotnet list src/LMSupplyDepots.sln package --vulnerable --include-transitive
 if ($LASTEXITCODE -ne 0) {
     Write-Host "⚠️ Vulnerability scan completed with warnings" -ForegroundColor Yellow
 }
@@ -62,7 +62,7 @@ if ($vulnerabilityFound) {
 
 # Build solution
 Write-Host "🔨 Building solution..." -ForegroundColor Cyan
-$buildResult = dotnet build --configuration $Configuration --verbosity quiet
+$buildResult = dotnet build src/LMSupplyDepots.sln --configuration $Configuration --verbosity quiet
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ Build failed" -ForegroundColor Red
     exit 1
@@ -87,7 +87,7 @@ if ($Verbose) {
 
 # Run tests with coverage
 $testCommand = @(
-    "dotnet", "test"
+    "dotnet", "test", "src/LMSupplyDepots.sln"
     "--configuration", $Configuration
     "--no-build"
     "--logger", "trx"

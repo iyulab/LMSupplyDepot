@@ -17,7 +17,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '9.0.x'
+        dotnet-version: '10.0.x'
         
     - name: Debug project structure
       run: |
@@ -219,7 +219,7 @@ jobs:
         $notes += "This release includes optimized builds for the following platforms:`n"
         $notes += ($platforms | ForEach-Object { "- $_" }) -join "`n"
         $notes += "`n`n### System Requirements`n"
-        $notes += "- .NET 9.0 Runtime required for your platform`n"
+        $notes += "- .NET 10.0 Runtime required for your platform`n"
         $notes += "- Supported architectures: x64, ARM64`n"
         $notes += "- Operating Systems: Windows 10/11, Linux (glibc/musl), macOS 10.15+`n`n"
         $notes += "### Support`n"

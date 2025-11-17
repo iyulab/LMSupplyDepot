@@ -374,3 +374,7 @@ output/
 claudedocs/
 
 secrets.json
+
+# Local
+.serena/
+models/

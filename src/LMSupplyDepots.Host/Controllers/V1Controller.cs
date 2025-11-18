@@ -2,6 +2,7 @@ using LMSupplyDepots.Contracts;
 using LMSupplyDepots.Host.Services;
 using LMSupplyDepots.SDK.OpenAI.Models;
 using LMSupplyDepots.SDK.Services;
+using LMSupplyDepots.External.LLamaEngine.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +25,7 @@ public class V1Controller : ControllerBase
     private readonly IDynamicToolService _dynamicToolService;
     private readonly IModelMetadataService? _modelMetadataService;
     private readonly IReasoningService _reasoningService;
+    private readonly IStopTokenOptimizer? _stopTokenOptimizer;
     private readonly ILogger<V1Controller> _logger;
 
     /// <summary>
@@ -42,6 +44,7 @@ public class V1Controller : ControllerBase
         _dynamicToolService = dynamicToolService;
         _reasoningService = reasoningService;
         _modelMetadataService = serviceProvider.GetService<IModelMetadataService>();
+        _stopTokenOptimizer = serviceProvider.GetService<IStopTokenOptimizer>();
         _logger = logger;
     }
 
@@ -743,12 +746,12 @@ public class V1Controller : ControllerBase
     /// Enhanced finish reason determination for streaming responses using dynamic parsing
     /// </summary>
     private async Task<string> DetermineStreamingFinishReasonAsync(
-        string accumulatedContent, 
-        bool hasTools, 
-        List<Tool>? tools, 
-        int tokenCount, 
-        int maxTokens, 
-        bool isStreamComplete, 
+        string accumulatedContent,
+        bool hasTools,
+        List<Tool>? tools,
+        int tokenCount,
+        int maxTokens,
+        bool isStreamComplete,
         string modelId,
         CancellationToken cancellationToken)
     {
@@ -786,14 +789,11 @@ public class V1Controller : ControllerBase
         {
             var trimmedContent = accumulatedContent.TrimEnd();
 
-            // Check for explicit end tokens from various model formats
-            var endTokens = new[]
-            {
-                "</s>", "<|endoftext|>", "<|end|>", "<|eot_id|>",
-                "[END]", "<END>", "###", "---END---"
-            };
+            // Get optimized end tokens for this model architecture
+            var endTokens = await GetOptimizedStopTokensAsync(modelId, cancellationToken);
 
-            if (endTokens.Any(token => trimmedContent.EndsWith(token, StringComparison.OrdinalIgnoreCase)))
+            // Check for explicit end tokens from model architecture
+            if (endTokens.Length > 0 && endTokens.Any(token => trimmedContent.EndsWith(token, StringComparison.OrdinalIgnoreCase)))
             {
                 return "stop";
             }
@@ -808,6 +808,87 @@ public class V1Controller : ControllerBase
 
         // Default to stop for completed streams
         return isStreamComplete ? "stop" : "length";
+    }
+
+    /// <summary>
+    /// Gets optimized stop tokens for a model using StopTokenOptimizer
+    /// </summary>
+    private async Task<string[]> GetOptimizedStopTokensAsync(string modelId, CancellationToken cancellationToken)
+    {
+        // Fallback end tokens if optimizer is not available
+        var fallbackEndTokens = new[]
+        {
+            "</s>", "<|endoftext|>", "<|end|>", "<|eot_id|>",
+            "[END]", "<END>", "###", "---END---"
+        };
+
+        if (_stopTokenOptimizer == null || _modelMetadataService == null)
+        {
+            return fallbackEndTokens;
+        }
+
+        try
+        {
+            // Get model architecture
+            var metadata = await _modelMetadataService.GetModelMetadataAsync(modelId, cancellationToken);
+            var architecture = metadata.Architecture;
+
+            if (string.IsNullOrEmpty(architecture))
+            {
+                return fallbackEndTokens;
+            }
+
+            // Create optimization context
+            var context = new ModelOptimizationContext
+            {
+                SupportsToolCalling = false,
+                ChatTemplateFormat = GetChatTemplateFormat(architecture),
+                HasSystemMessages = false,
+                HasToolResults = false,
+                ExpectedLength = GenerationLength.Medium,
+                Strategy = StopTokenStrategy.Balanced,
+                MaxTokens = 256,
+                Temperature = 0.7f
+            };
+
+            // Get optimized stop tokens
+            var optimizedStops = _stopTokenOptimizer.OptimizeStopTokens(
+                architecture,
+                new List<string>(),
+                context);
+
+            var stopTokens = optimizedStops.GetAllStopTokens().ToArray();
+
+            _logger.LogDebug(
+                "Using {Count} optimized stop tokens for {Architecture}: {Tokens}",
+                stopTokens.Length,
+                architecture,
+                string.Join(", ", stopTokens.Take(5))); // Log first 5 for brevity
+
+            return stopTokens;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get optimized stop tokens for model {ModelId}, using fallback", modelId);
+            return fallbackEndTokens;
+        }
+    }
+
+    /// <summary>
+    /// Determine chat template format from architecture
+    /// </summary>
+    private string GetChatTemplateFormat(string architecture)
+    {
+        return architecture.ToLowerInvariant() switch
+        {
+            "llama" => "llama-native",
+            "phi3" or "phi" => "phi",
+            "mistral" or "mixtral" => "mistral",
+            "qwen" or "qwen2" => "chatml",
+            "gemma" => "gemma",
+            "deepseek" => "deepseek",
+            _ => "generic"
+        };
     }
 
     /// <summary>

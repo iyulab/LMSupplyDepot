@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
 
     <!-- Package metadata -->
-    <Version>0.3.2</Version>
+    <Version>0.3.3</Version>
     <Authors>iyulab</Authors>
     <PackageTags>iyulab</PackageTags>
     <PackageIcon>logo.png</PackageIcon>

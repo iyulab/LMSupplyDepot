@@ -86,6 +86,11 @@ internal class HostService : IHostService, IAsyncDisposable
                     await _depot.DownloadModelAsync(modelKey, null, CancellationToken.None);
                     _logger.LogInformation("Background download completed successfully for {ModelKey}", modelKey);
                 }
+                catch (OperationCanceledException)
+                {
+                    // Expected cancellation - already logged at lower layers as info
+                    // No additional logging needed at host layer to avoid noise
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Background download failed for {ModelKey}", modelKey);

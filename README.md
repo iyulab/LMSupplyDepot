@@ -1,4 +1,6 @@
 # LMSupplyDepots
+> [!IMPORTANT]
+> **LMSupplyDepots 프로젝트가 [lm-supply](https://github.com/iyulab/lm-supply)로 이전되었습니다.** > 현재 이 레포지토리는 아카이브 모드이며, 모든 최신 개발 사항은 새 레포지토리에서 진행됩니다.
 
 [![Build and Release](https://github.com/iyulab/LMSupplyDepot/actions/workflows/hostapp.yml/badge.svg)](https://github.com/iyulab/LMSupplyDepot/actions/workflows/hostapp.yml)
 [![License](https://img.shields.io/github/license/iyulab/LMSupplyDepot)](https://github.com/iyulab/LMSupplyDepot/blob/main/LICENSE)
